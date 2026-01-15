@@ -1,0 +1,21 @@
+{
+  "name": "donut-cli",
+  "version": "1.0.0",
+  "description": "A spinning ASCII donut animation for your terminal",
+  "main": "dist/index.js",
+  "bin": {
+    "donut": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "npx ts-node src/index.ts"
+  },
+  "keywords": ["donut", "ascii", "terminal", "animation", "cli"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0"
+  }
+}
