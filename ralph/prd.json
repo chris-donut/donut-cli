@@ -166,8 +166,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created EventBus class with typed event system, ToolEvent/AgentEvent unions, on/once/off methods. Added withToolEvents wrapper for easy instrumentation. Integrated into hb_backtest_start tool as demo."
     }
   ]
 }

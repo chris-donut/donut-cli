@@ -7,6 +7,7 @@ import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { HummingbotClient, HummingbotClientConfig } from "../integrations/hummingbot-client.js";
 import { TimeframeSchema } from "../core/types.js";
+import { eventBus, createToolStartEvent, createToolEndEvent, createToolErrorEvent } from "../core/events.js";
 
 // Global client instance (initialized when server is created)
 let hummingbotClient: HummingbotClient | null = null;
@@ -48,28 +49,51 @@ export const hbBacktestStartTool = tool(
   },
   async (args) => {
     const client = getClient();
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const startTime = Date.now();
 
-    const config = {
-      symbols: [args.tradingPair],
-      startTs: args.startTs,
-      endTs: args.endTs,
-      initialBalance: args.initialBalance,
-      leverage: { btcEthLeverage: args.leverage, altcoinLeverage: args.leverage },
-      timeframes: args.timeframes,
-    };
+    // Emit tool:start event
+    await eventBus.emit(createToolStartEvent("hb_backtest_start", args as Record<string, unknown>, requestId));
 
-    const status = await client.startBacktest(config);
+    try {
+      const config = {
+        symbols: [args.tradingPair],
+        startTs: args.startTs,
+        endTs: args.endTs,
+        initialBalance: args.initialBalance,
+        leverage: { btcEthLeverage: args.leverage, altcoinLeverage: args.leverage },
+        timeframes: args.timeframes,
+      };
 
-    return {
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify({
-          success: true,
-          message: `Backtest started with run_id: ${status.runId}`,
-          status,
-        }, null, 2),
-      }],
-    };
+      const status = await client.startBacktest(config);
+      const durationMs = Date.now() - startTime;
+
+      // Emit tool:end event
+      await eventBus.emit(createToolEndEvent("hb_backtest_start", { runId: status.runId }, durationMs, requestId));
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            success: true,
+            message: `Backtest started with run_id: ${status.runId}`,
+            status,
+          }, null, 2),
+        }],
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+
+      // Emit tool:error event
+      await eventBus.emit(createToolErrorEvent(
+        "hb_backtest_start",
+        error instanceof Error ? error.message : String(error),
+        durationMs,
+        requestId
+      ));
+
+      throw error;
+    }
   }
 );
 
