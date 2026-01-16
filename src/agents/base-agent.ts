@@ -60,6 +60,12 @@ export interface AgentConfig {
    * Optional dependency overrides for testing or custom implementations
    */
   dependencies?: Partial<AgentDependencies>;
+
+  /**
+   * Maximum iterations before graceful degradation (default: 25)
+   * Agent will generate progress summary instead of failing
+   */
+  maxIterations?: number;
 }
 
 // ============================================================================
@@ -113,6 +119,15 @@ export abstract class BaseAgent {
   /** Context manager for efficient memory usage */
   protected readonly contextManager: ContextManager = new ContextManager();
 
+  /** Current iteration count for the run */
+  protected iterationCount: number = 0;
+
+  /** Maximum iterations before graceful degradation */
+  protected readonly maxIterations: number;
+
+  /** Warning threshold (percentage of maxIterations) */
+  protected readonly iterationWarningThreshold: number = 0.8;
+
   constructor(config: AgentConfig) {
     this.config = config;
 
@@ -128,6 +143,9 @@ export abstract class BaseAgent {
     this.riskManager = deps.riskManager;
     this.mcpProvider = deps.mcpProvider;
     this.sessionProvider = deps.sessionProvider;
+
+    // Initialize iteration limit (default 25, can be overridden)
+    this.maxIterations = config.maxIterations ?? 25;
   }
 
   /**
@@ -227,13 +245,20 @@ export abstract class BaseAgent {
 
     this.blockedTools.clear();
 
-    // Reset reasoning scratchpad for new run
+    // Reset reasoning scratchpad and iteration count for new run
     this.scratchpad.reset();
+    this.iterationCount = 0;
     this.scratchpad.startThinking(`Processing prompt: ${prompt.slice(0, 100)}...`);
 
     try {
       // Process streaming messages from the agent
       for await (const message of query({ prompt, options }) as AsyncIterable<AgentMessage>) {
+        // Check iteration limit before processing
+        if (this.checkIterationLimit()) {
+          result = this.generateProgressSummary();
+          break;
+        }
+
         await this.processMessage(message, stage);
 
         // Capture session ID from init message
@@ -467,6 +492,102 @@ export abstract class BaseAgent {
       return removed;
     }
     return 0;
+  }
+
+  /**
+   * Get current iteration count
+   */
+  getIterationCount(): number {
+    return this.iterationCount;
+  }
+
+  /**
+   * Get max iterations setting
+   */
+  getMaxIterations(): number {
+    return this.maxIterations;
+  }
+
+  /**
+   * Check if iteration limit has been reached
+   */
+  hasReachedIterationLimit(): boolean {
+    return this.iterationCount >= this.maxIterations;
+  }
+
+  /**
+   * Generate a progress summary when iteration limit is reached
+   * This provides graceful degradation instead of hard failure
+   */
+  protected generateProgressSummary(): string {
+    const trace = this.getReasoningTrace();
+    const contextUsage = this.contextManager.getUsage();
+
+    const completedActions = trace.steps
+      .filter((s) => s.action)
+      .map((s) => `- ${s.action}: ${s.observation?.slice(0, 100) || "completed"}`)
+      .join("\n");
+
+    const lastThought = trace.steps.length > 0
+      ? trace.steps[trace.steps.length - 1].thought
+      : "No reasoning recorded";
+
+    return [
+      "⚠️ Iteration limit reached - generating progress summary",
+      "",
+      `Iterations: ${this.iterationCount}/${this.maxIterations}`,
+      `Reasoning steps: ${trace.steps.length}`,
+      `Context usage: ${(contextUsage.percentUsed * 100).toFixed(1)}%`,
+      "",
+      "Completed actions:",
+      completedActions || "- No actions completed",
+      "",
+      "Last thought:",
+      lastThought,
+      "",
+      "Consider:",
+      "- Breaking down the task into smaller steps",
+      "- Increasing maxIterations if more time is needed",
+      "- Providing more specific instructions",
+    ].join("\n");
+  }
+
+  /**
+   * Check and handle iteration limit during processing
+   * Returns true if limit was reached and processing should stop
+   */
+  protected checkIterationLimit(): boolean {
+    this.iterationCount++;
+
+    // Check warning threshold
+    const warningThreshold = Math.floor(this.maxIterations * this.iterationWarningThreshold);
+    if (this.iterationCount === warningThreshold) {
+      this.logger.warn("Approaching iteration limit", {
+        current: this.iterationCount,
+        max: this.maxIterations,
+        remaining: this.maxIterations - this.iterationCount,
+      });
+    }
+
+    // Check if limit reached
+    if (this.iterationCount >= this.maxIterations) {
+      this.logger.warn("Iteration limit reached", {
+        iterations: this.iterationCount,
+        maxIterations: this.maxIterations,
+      });
+
+      // Emit iteration limit event
+      eventBus.emit({
+        type: "agent:thinking",
+        agentName: this.agentType,
+        thought: `Iteration limit (${this.maxIterations}) reached - generating progress summary`,
+        timestamp: Date.now(),
+      });
+
+      return true;
+    }
+
+    return false;
   }
 }
 

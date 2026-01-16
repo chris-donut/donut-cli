@@ -54,8 +54,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added maxIterations to AgentConfig, checkIterationLimit() and generateProgressSummary() methods. Warning at 80%, graceful summary at 100%. Emits agent:thinking event on limit."
     },
     {
       "id": "AG-004",

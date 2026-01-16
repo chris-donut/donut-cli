@@ -142,3 +142,18 @@ Total commits: 4 (modularization, logging, retry, shutdown, events)
   - Clear context on session reset to prevent stale data accumulation
 
 ---
+
+### 2026-01-16 11:40 - AG-003 (Iteration Limits with Graceful Degradation)
+- **What was implemented**: Runaway agent prevention with helpful summaries
+- **Files changed**:
+  - src/agents/base-agent.ts (added iteration tracking and limits)
+- **Learnings for future iterations:**
+  - Default 25 iterations is reasonable for most tasks
+  - 80% warning threshold gives agents time to wrap up
+  - generateProgressSummary() shows completed actions + last thought
+  - Graceful degradation > hard failure for user experience
+  - Include iteration count in result for post-run analysis
+  - Reset iteration count on new run, not just session reset
+  - Allow per-config override via maxIterations property
+
+---
