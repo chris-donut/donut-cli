@@ -7,6 +7,8 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1405 | 10:18 PM | 🔵 | Git Status Shows 14 Modified Files and 3 New Files | ~489 |
+| #1380 | 10:13 PM | 🟣 | Session ID Validation Security - Path Traversal Prevention | ~396 |
 | #1290 | 9:39 PM | 🔵 | Comprehensive Thesis Trading Gap Analysis Completed | ~695 |
 | #1140 | 8:35 PM | 🔵 | Donut CLI Type System and Hook Integration Architecture Analysis | ~1664 |
 </claude-mem-context>

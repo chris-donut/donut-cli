@@ -223,6 +223,10 @@ export const decisionLogTool = tool(
   }
 );
 
+// Security: Maximum query limits to prevent resource exhaustion
+const MAX_QUERY_LIMIT = 1000;
+const DEFAULT_QUERY_LIMIT = 50;
+
 /**
  * Query past decisions
  */
@@ -241,8 +245,20 @@ export const decisionQueryTool = tool(
       .string()
       .optional()
       .describe("Filter decisions before this ISO date"),
-    limit: z.number().int().positive().default(50).describe("Max results"),
-    offset: z.number().int().min(0).default(0).describe("Offset for pagination"),
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .max(MAX_QUERY_LIMIT)
+      .default(DEFAULT_QUERY_LIMIT)
+      .describe(`Max results (max: ${MAX_QUERY_LIMIT})`),
+    offset: z
+      .number()
+      .int()
+      .min(0)
+      .max(100000) // Prevent absurdly high offsets
+      .default(0)
+      .describe("Offset for pagination"),
   },
   async (args) => {
     if (!isAvailable || !pool) {

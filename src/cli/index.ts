@@ -1,44 +1,31 @@
 /**
- * CLI Module - Entry Point
+ * CLI Module Index
  *
- * Composes all command modules into a unified CLI program.
- * Each command group is in its own module for maintainability.
+ * Central export point for all CLI command modules and utilities.
  */
 
-import { Command } from "commander";
-import { registerSessionCommands } from "./commands/session.js";
+// Command registration functions
+export { registerSessionCommands } from "./commands/session.js";
+export { registerPaperTradingCommands } from "./commands/paper-trading.js";
 
-// Re-export theme for use by other modules
-export * from "./theme.js";
-
-/**
- * Create and configure the CLI program
- */
-export function createProgram(): Command {
-  const program = new Command();
-
-  program
-    .name("donut")
-    .description("Unified trading terminal with Claude Agent SDK")
-    .version("0.1.0");
-
-  // Register command modules
-  registerSessionCommands(program);
-
-  // TODO: These will be added as we extract them
-  // registerStrategyCommands(program);
-  // registerBacktestCommands(program);
-  // registerPaperTradingCommands(program);
-  // registerNotificationCommands(program);
-  // registerDemoCommands(program);
-
-  return program;
-}
-
-/**
- * Run the CLI
- */
-export function runCLI(): void {
-  const program = createProgram();
-  program.parse();
-}
+// Theme exports (for use in other command modules)
+export {
+  BANNER,
+  DEMO_BANNER,
+  DEMO_INDICATOR,
+  PRIMARY,
+  SUCCESS,
+  ERROR,
+  WARNING,
+  INFO,
+  MUTED,
+  formatNumber,
+  formatCurrency,
+  formatPercent,
+  formatPnL,
+  formatPercentColored,
+  formatRelativeTime,
+  tableRow,
+  separator,
+  sectionHeader,
+} from "./theme.js";

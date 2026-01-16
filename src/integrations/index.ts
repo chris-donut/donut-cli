@@ -1,27 +1,14 @@
 /**
- * Integrations - Export all integration modules
+ * Integrations Module - Barrel Exports
+ *
+ * Re-exports all integration clients, factories, and utilities.
  */
 
-// Base client
-export { BaseClient, BaseClientConfig, HttpRequestOptions } from "./base-client.js";
+// ============================================================================
+// Clients
+// ============================================================================
 
-// Client factory
-export {
-  getHummingbotClient,
-  getNofxClient,
-  getBacktestClient,
-  getTelegramConfig,
-  clearClientRegistry,
-  removeClient,
-  hasClient,
-  getClientCount,
-  checkAllBackends,
-  getHealthyBackend,
-  BackendType,
-  ClientType,
-} from "./client-factory.js";
-
-// Individual clients
+// Hummingbot Dashboard client
 export {
   HummingbotClient,
   HummingbotClientConfig,
@@ -31,6 +18,7 @@ export {
   CandleData,
 } from "./hummingbot-client.js";
 
+// nofx backtesting client
 export {
   NofxClient,
   NofxClientConfig,
@@ -38,16 +26,58 @@ export {
   BacktestRunMetadata,
 } from "./nofx-client.js";
 
+// Telegram notification functions
 export {
   TelegramClientConfig,
-  validateCredentials,
-  sendMessage,
-  formatNotification,
   loadTelegramConfig,
+  sendMessage,
   sendTradeApproval,
   editMessage,
+  validateCredentials,
   startWebhookServer,
   stopWebhookServer,
   waitForApproval,
-  requestApprovalAndWait,
+  formatNotification,
 } from "./telegram-client.js";
+
+// ============================================================================
+// Factory
+// ============================================================================
+
+export {
+  // Wrapper class
+  TelegramClient,
+  TelegramConfig,
+  // Types
+  ClientType,
+  ClientConfig,
+  Client,
+  BackendHealth,
+  // Factory functions
+  getHummingbotClient,
+  getNofxClient,
+  getTelegramClient,
+  createClient,
+  // Cache management
+  clearClientCache,
+  clearClient,
+  getCacheSize,
+  isClientCached,
+  // Health checks
+  checkBackendHealth,
+  checkAllBackendsHealth,
+  getPreferredBacktestBackend,
+} from "./client-factory.js";
+
+// ============================================================================
+// Base Client (for extension)
+// ============================================================================
+
+export {
+  BaseHttpClient,
+  AuthenticatedHttpClient,
+  BaseClientConfig,
+  AuthenticatedClientConfig,
+  HttpMethod,
+  RequestOptions,
+} from "./base-client.js";

@@ -1,70 +1,103 @@
 /**
- * Base HTTP Client - Shared functionality for all API clients
+ * Base HTTP Client
  *
- * Provides consistent HTTP handling, timeout management, and error handling
- * across all backend integrations.
+ * Abstract base class for HTTP API clients with shared functionality:
+ * - Timeout handling with AbortController
+ * - JSON serialization/deserialization
+ * - Error handling with status codes
+ * - Optional authentication headers
  */
 
 import { ApiError } from "../core/errors.js";
-import { TIMEOUTS, RETRY } from "../core/constants.js";
 
+// ============================================================================
+// Types
+// ============================================================================
+
+/**
+ * HTTP methods supported by the client
+ */
+export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+
+/**
+ * Base configuration for HTTP clients
+ */
 export interface BaseClientConfig {
+  /** Base URL for the API (e.g., "http://localhost:8000") */
   baseUrl: string;
+  /** Request timeout in milliseconds (default: 30000) */
   timeout?: number;
-  authToken?: string;
+  /** Default headers to include in all requests */
+  defaultHeaders?: Record<string, string>;
 }
 
-export interface HttpRequestOptions {
-  method: "GET" | "POST" | "PUT" | "DELETE";
-  path: string;
-  body?: unknown;
+/**
+ * Request options for individual requests
+ */
+export interface RequestOptions {
+  /** Additional headers for this request */
   headers?: Record<string, string>;
+  /** Override timeout for this request */
+  timeout?: number;
+  /** Query parameters */
+  params?: Record<string, string | number | boolean>;
 }
+
+// ============================================================================
+// Base Client Implementation
+// ============================================================================
 
 /**
  * Abstract base class for HTTP API clients
  */
-export abstract class BaseClient {
+export abstract class BaseHttpClient {
   protected readonly baseUrl: string;
   protected readonly timeout: number;
-  protected readonly authToken?: string;
+  protected readonly defaultHeaders: Record<string, string>;
 
   constructor(config: BaseClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, ""); // Remove trailing slash
-    this.timeout = config.timeout || TIMEOUTS.httpRequest;
-    this.authToken = config.authToken;
+    this.timeout = config.timeout ?? 30000;
+    this.defaultHeaders = {
+      "Content-Type": "application/json",
+      ...config.defaultHeaders,
+    };
   }
 
   /**
-   * Check if the backend service is healthy
+   * Get the client name for error messages
    */
-  abstract healthCheck(): Promise<boolean>;
+  protected abstract getClientName(): string;
 
   /**
-   * Get the name of this client for logging
-   */
-  abstract getName(): string;
-
-  /**
-   * Make an HTTP request with timeout and error handling
+   * Make an HTTP request
    */
   protected async request<T = Record<string, unknown>>(
-    options: HttpRequestOptions
+    method: HttpMethod,
+    path: string,
+    body?: unknown,
+    options?: RequestOptions
   ): Promise<T> {
-    const { method, path, body, headers: customHeaders } = options;
-    const url = `${this.baseUrl}${path}`;
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...customHeaders,
-    };
-
-    if (this.authToken) {
-      headers["Authorization"] = `Bearer ${this.authToken}`;
+    // Build URL with query parameters
+    let url = `${this.baseUrl}${path}`;
+    if (options?.params) {
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(options.params)) {
+        searchParams.append(key, String(value));
+      }
+      url += `?${searchParams.toString()}`;
     }
 
+    // Merge headers
+    const headers: Record<string, string> = {
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    // Setup timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const timeoutMs = options?.timeout ?? this.timeout;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(url, {
@@ -75,91 +108,154 @@ export abstract class BaseClient {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new ApiError(`${this.getName()} API error: ${errorText}`, {
-          statusCode: response.status,
-          endpoint: path,
-          context: { method, url },
-        });
+        const errorText = await response.text().catch(() => "Unknown error");
+        throw new ApiError(
+          `${this.getClientName()} API error (${response.status}): ${errorText}`,
+          {
+            statusCode: response.status,
+            endpoint: path,
+            context: { method, url },
+          }
+        );
       }
 
-      return (await response.json()) as T;
+      // Handle empty responses
+      const text = await response.text();
+      if (!text) {
+        return {} as T;
+      }
+
+      return JSON.parse(text) as T;
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
       }
 
+      // Handle abort (timeout)
       if (error instanceof Error && error.name === "AbortError") {
-        throw new ApiError(`${this.getName()} request timeout after ${this.timeout}ms`, {
-          statusCode: 408,
-          endpoint: path,
-          context: { method, url, timeout: this.timeout },
-        });
+        throw new ApiError(
+          `${this.getClientName()} request timed out after ${timeoutMs}ms`,
+          {
+            statusCode: 408,
+            endpoint: path,
+            context: { method, url, timeout: timeoutMs },
+          }
+        );
       }
 
-      throw new ApiError(`${this.getName()} request failed: ${error instanceof Error ? error.message : String(error)}`, {
-        endpoint: path,
-        context: { method, url },
-        cause: error instanceof Error ? error : undefined,
-      });
+      // Handle network errors
+      throw new ApiError(
+        `${this.getClientName()} network error: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          endpoint: path,
+          context: { method, url },
+          cause: error instanceof Error ? error : undefined,
+        }
+      );
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
   /**
-   * Make a GET request
+   * Convenience method for GET requests
    */
-  protected get<T = Record<string, unknown>>(path: string): Promise<T> {
-    return this.request<T>({ method: "GET", path });
+  protected get<T = Record<string, unknown>>(
+    path: string,
+    options?: RequestOptions
+  ): Promise<T> {
+    return this.request<T>("GET", path, undefined, options);
   }
 
   /**
-   * Make a POST request
+   * Convenience method for POST requests
    */
   protected post<T = Record<string, unknown>>(
     path: string,
-    body?: unknown
+    body?: unknown,
+    options?: RequestOptions
   ): Promise<T> {
-    return this.request<T>({ method: "POST", path, body });
+    return this.request<T>("POST", path, body, options);
   }
 
   /**
-   * Execute with retry logic for retriable errors
+   * Convenience method for PUT requests
    */
-  protected async withRetry<T>(
-    fn: () => Promise<T>,
-    options: {
-      maxAttempts?: number;
-      baseDelay?: number;
-      maxDelay?: number;
-    } = {}
+  protected put<T = Record<string, unknown>>(
+    path: string,
+    body?: unknown,
+    options?: RequestOptions
   ): Promise<T> {
-    const {
-      maxAttempts = RETRY.maxAttempts,
-      baseDelay = RETRY.baseDelay,
-      maxDelay = RETRY.maxDelay,
-    } = options;
+    return this.request<T>("PUT", path, body, options);
+  }
 
-    let lastError: unknown;
+  /**
+   * Convenience method for DELETE requests
+   */
+  protected delete<T = Record<string, unknown>>(
+    path: string,
+    options?: RequestOptions
+  ): Promise<T> {
+    return this.request<T>("DELETE", path, undefined, options);
+  }
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return await fn();
-      } catch (error) {
-        lastError = error;
+  /**
+   * Health check - override in subclasses for specific endpoints
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      await this.get("/health");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
 
-        // Only retry on network/timeout errors (5xx, 429)
-        if (error instanceof ApiError && error.isRetriable && attempt < maxAttempts) {
-          const delay = Math.min(baseDelay * Math.pow(RETRY.backoffMultiplier, attempt - 1), maxDelay);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
-        }
+// ============================================================================
+// Authenticated Client
+// ============================================================================
 
-        throw error;
-      }
+/**
+ * Configuration for authenticated clients
+ */
+export interface AuthenticatedClientConfig extends BaseClientConfig {
+  /** Bearer token for authentication */
+  authToken?: string;
+  /** API key header name and value */
+  apiKey?: { headerName: string; value: string };
+}
+
+/**
+ * Base class for clients that require authentication
+ */
+export abstract class AuthenticatedHttpClient extends BaseHttpClient {
+  protected readonly authToken?: string;
+  protected readonly apiKey?: { headerName: string; value: string };
+
+  constructor(config: AuthenticatedClientConfig) {
+    // Build default headers with auth
+    const defaultHeaders: Record<string, string> = {
+      ...config.defaultHeaders,
+    };
+
+    if (config.authToken) {
+      defaultHeaders["Authorization"] = `Bearer ${config.authToken}`;
     }
 
-    throw lastError;
+    if (config.apiKey) {
+      defaultHeaders[config.apiKey.headerName] = config.apiKey.value;
+    }
+
+    super({ ...config, defaultHeaders });
+    this.authToken = config.authToken;
+    this.apiKey = config.apiKey;
+  }
+
+  /**
+   * Check if the client has authentication configured
+   */
+  hasAuth(): boolean {
+    return !!this.authToken || !!this.apiKey;
   }
 }

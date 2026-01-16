@@ -1,14 +1,14 @@
 /**
  * Dependency Injection Interfaces
  *
- * Defines contracts for injectable dependencies used across the application.
- * This enables:
- * - Unit testing with mocks
- * - Swappable implementations
- * - Decoupled architecture
+ * Defines contracts for services that agents and tools depend on.
+ * Enables loose coupling, testability, and flexible implementations.
+ *
+ * Pattern: Constructor injection with interface dependencies
+ * Inspired by: Dexter agent architecture
  */
 
-import { AgentType, WorkflowStage, ToolExecutionContext } from "./types.js";
+import { AgentType, WorkflowStage } from "./types.js";
 
 // ============================================================================
 // Logger Interface
@@ -20,22 +20,22 @@ import { AgentType, WorkflowStage, ToolExecutionContext } from "./types.js";
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 /**
- * Logger interface for consistent output handling
+ * Logger interface for consistent logging across components
  */
 export interface Logger {
+  /** Log debug message */
   debug(message: string, context?: Record<string, unknown>): void;
+
+  /** Log info message */
   info(message: string, context?: Record<string, unknown>): void;
+
+  /** Log warning message */
   warn(message: string, context?: Record<string, unknown>): void;
-  error(message: string, context?: Record<string, unknown>): void;
 
-  /**
-   * Write raw output without formatting (for streaming)
-   */
-  write(text: string): void;
+  /** Log error message */
+  error(message: string, error?: Error, context?: Record<string, unknown>): void;
 
-  /**
-   * Create a child logger with additional context
-   */
+  /** Create child logger with additional context */
   child(context: Record<string, unknown>): Logger;
 }
 
@@ -44,30 +44,39 @@ export interface Logger {
 // ============================================================================
 
 /**
- * Result of a risk check
+ * Risk check result
  */
 export interface RiskCheckResult {
   allowed: boolean;
-  reason?: string;
   warnings: string[];
+  reason?: string;
 }
 
 /**
- * Risk manager interface for pre/post execution checks
+ * Risk manager interface for trade validation
  */
 export interface RiskManager {
-  /**
-   * Pre-execution risk check
-   */
-  preToolUseHook(context: ToolExecutionContext): Promise<RiskCheckResult>;
+  /** Check if a tool execution is allowed */
+  checkToolExecution(
+    toolName: string,
+    params: Record<string, unknown>,
+    agentType: AgentType
+  ): RiskCheckResult;
 
-  /**
-   * Post-execution tracking
-   */
-  postToolUseHook(
-    context: ToolExecutionContext,
-    result: unknown
-  ): Promise<void>;
+  /** Check if a trade is within risk limits */
+  checkTrade(trade: {
+    symbol: string;
+    side: "buy" | "sell";
+    size: number;
+    price?: number;
+  }): RiskCheckResult;
+
+  /** Get current risk limits */
+  getLimits(): {
+    maxPositionSize: number;
+    maxDailyLoss: number;
+    maxDrawdown: number;
+  };
 }
 
 // ============================================================================
@@ -75,52 +84,26 @@ export interface RiskManager {
 // ============================================================================
 
 /**
- * MCP server instance type (from Claude Agent SDK)
- */
-export interface McpServerInstance {
-  // The actual instance type depends on SDK implementation
-  // This is intentionally flexible to allow different server types
-  [key: string]: unknown;
-}
-
-/**
- * MCP server configuration for agents
+ * MCP server configuration
  */
 export interface McpServerConfig {
-  type: "sdk";
-  name: string;
-  instance: McpServerInstance;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
 }
 
 /**
- * Backend type for MCP server selection
- */
-export type BackendType = "hummingbot" | "nofx" | "none";
-
-/**
- * Provider interface for MCP servers
- * Allows different implementations for different backends
+ * Provider for MCP server configurations
  */
 export interface McpServerProvider {
-  /**
-   * Get the configured backend type
-   */
-  getBackendType(): BackendType;
+  /** Get MCP servers for a given workflow stage */
+  getServersForStage(stage: WorkflowStage): McpServerConfig[];
 
-  /**
-   * Get MCP server configurations for the agent
-   */
-  getMcpServers(): Record<string, McpServerConfig>;
+  /** Get all available MCP server names */
+  getAvailableServers(): string[];
 
-  /**
-   * Get default tools for a specific agent and backend
-   */
-  getDefaultTools(agentType: AgentType): string[];
-
-  /**
-   * Check if the backend is healthy
-   */
-  healthCheck(): Promise<boolean>;
+  /** Check if a specific server is available */
+  isServerAvailable(serverName: string): boolean;
 }
 
 // ============================================================================
@@ -128,178 +111,94 @@ export interface McpServerProvider {
 // ============================================================================
 
 /**
+ * Session state for persistence
+ */
+export interface SessionState {
+  sessionId: string;
+  currentStage: WorkflowStage;
+  agentSessions: Record<string, string>;
+  createdAt: Date;
+  updatedAt: Date;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Provider for session management
  */
 export interface SessionProvider {
-  /**
-   * Get the agent session ID for resume
-   */
-  getAgentSession(agentType: AgentType): string | undefined;
+  /** Get current session state */
+  getState(): SessionState;
 
-  /**
-   * Update the agent session ID
-   */
-  updateAgentSession(agentType: AgentType, sessionId: string): Promise<void>;
+  /** Update session state */
+  updateState(updates: Partial<SessionState>): void;
 
-  /**
-   * Get session data
-   */
-  getSessionData(): Record<string, unknown>;
+  /** Save session to persistent storage */
+  save(): Promise<void>;
+
+  /** Get session ID */
+  getSessionId(): string;
+
+  /** Get or set agent session ID for continuity */
+  getAgentSessionId(agentType: AgentType): string | undefined;
+  setAgentSessionId(agentType: AgentType, sessionId: string): void;
 }
 
 // ============================================================================
-// Agent Dependencies Container
+// Event Emitter Interface
 // ============================================================================
 
 /**
- * Container for all agent dependencies
- * Agents receive this instead of creating dependencies directly
+ * Event emitter for decoupled communication
  */
-export interface AgentDependencies {
+export interface EventEmitter {
+  /** Emit an event */
+  emit(eventType: string, payload: Record<string, unknown>): void;
+
+  /** Subscribe to an event */
+  on(eventType: string, handler: (payload: Record<string, unknown>) => void): string;
+
+  /** Unsubscribe from an event */
+  off(subscriptionId: string): void;
+}
+
+// ============================================================================
+// Configuration Provider Interface
+// ============================================================================
+
+/**
+ * Configuration provider for runtime settings
+ */
+export interface ConfigProvider {
+  /** Get a configuration value */
+  get<T>(key: string): T | undefined;
+
+  /** Get a configuration value with default */
+  getOrDefault<T>(key: string, defaultValue: T): T;
+
+  /** Check if a configuration key exists */
+  has(key: string): boolean;
+
+  /** Get all configuration as object */
+  getAll(): Record<string, unknown>;
+}
+
+// ============================================================================
+// Dependencies Container
+// ============================================================================
+
+/**
+ * Container for all injectable dependencies
+ */
+export interface Dependencies {
   logger: Logger;
-  riskManager: RiskManager;
+  riskManager?: RiskManager;
   mcpProvider: McpServerProvider;
   sessionProvider: SessionProvider;
-}
-
-// ============================================================================
-// Default Implementations
-// ============================================================================
-
-/**
- * Console-based logger implementation
- */
-export class ConsoleLogger implements Logger {
-  private context: Record<string, unknown>;
-  private minLevel: LogLevel;
-
-  constructor(
-    context: Record<string, unknown> = {},
-    minLevel: LogLevel = "info"
-  ) {
-    this.context = context;
-    this.minLevel = minLevel;
-  }
-
-  private shouldLog(level: LogLevel): boolean {
-    const levels: LogLevel[] = ["debug", "info", "warn", "error"];
-    return levels.indexOf(level) >= levels.indexOf(this.minLevel);
-  }
-
-  private formatMessage(
-    level: LogLevel,
-    message: string,
-    context?: Record<string, unknown>
-  ): string {
-    const timestamp = new Date().toISOString();
-    const merged = { ...this.context, ...context };
-    const contextStr =
-      Object.keys(merged).length > 0 ? ` ${JSON.stringify(merged)}` : "";
-    return `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}`;
-  }
-
-  debug(message: string, context?: Record<string, unknown>): void {
-    if (this.shouldLog("debug")) {
-      console.debug(this.formatMessage("debug", message, context));
-    }
-  }
-
-  info(message: string, context?: Record<string, unknown>): void {
-    if (this.shouldLog("info")) {
-      console.info(this.formatMessage("info", message, context));
-    }
-  }
-
-  warn(message: string, context?: Record<string, unknown>): void {
-    if (this.shouldLog("warn")) {
-      console.warn(this.formatMessage("warn", message, context));
-    }
-  }
-
-  error(message: string, context?: Record<string, unknown>): void {
-    if (this.shouldLog("error")) {
-      console.error(this.formatMessage("error", message, context));
-    }
-  }
-
-  write(text: string): void {
-    process.stdout.write(text);
-  }
-
-  child(context: Record<string, unknown>): Logger {
-    return new ConsoleLogger({ ...this.context, ...context }, this.minLevel);
-  }
+  eventEmitter?: EventEmitter;
+  config?: ConfigProvider;
 }
 
 /**
- * Silent logger for testing
+ * Partial dependencies for optional injection
  */
-export class NullLogger implements Logger {
-  debug(): void {}
-  info(): void {}
-  warn(): void {}
-  error(): void {}
-  write(): void {}
-  child(): Logger {
-    return this;
-  }
-}
-
-/**
- * Buffered logger that captures output for testing
- */
-export class BufferedLogger implements Logger {
-  private logs: Array<{
-    level: LogLevel;
-    message: string;
-    context?: Record<string, unknown>;
-  }> = [];
-  private output: string[] = [];
-
-  debug(message: string, context?: Record<string, unknown>): void {
-    this.logs.push({ level: "debug", message, context });
-  }
-
-  info(message: string, context?: Record<string, unknown>): void {
-    this.logs.push({ level: "info", message, context });
-  }
-
-  warn(message: string, context?: Record<string, unknown>): void {
-    this.logs.push({ level: "warn", message, context });
-  }
-
-  error(message: string, context?: Record<string, unknown>): void {
-    this.logs.push({ level: "error", message, context });
-  }
-
-  write(text: string): void {
-    this.output.push(text);
-  }
-
-  child(context: Record<string, unknown>): Logger {
-    // For simplicity, return same instance (logs will include all children)
-    return this;
-  }
-
-  /**
-   * Get all captured logs
-   */
-  getLogs(): typeof this.logs {
-    return [...this.logs];
-  }
-
-  /**
-   * Get captured raw output
-   */
-  getOutput(): string {
-    return this.output.join("");
-  }
-
-  /**
-   * Clear captured data
-   */
-  clear(): void {
-    this.logs = [];
-    this.output = [];
-  }
-}
+export type PartialDependencies = Partial<Dependencies>;

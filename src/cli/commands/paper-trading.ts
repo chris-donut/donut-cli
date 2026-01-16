@@ -1,10 +1,13 @@
 /**
- * Paper Trading Commands - Simulated trading with live/manual prices
+ * Paper Trading Commands Module
+ *
+ * Handles paper trading simulation: start, status, trades, stop, list, compare
  */
 
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+
 import { loadConfig } from "../../core/config.js";
 import {
   createPaperSession,
@@ -13,14 +16,14 @@ import {
   calculatePaperMetrics,
 } from "../../modes/paper-trading.js";
 import { HummingbotClient } from "../../integrations/hummingbot-client.js";
-import { logError } from "../../core/errors.js";
 
 /**
- * Register paper trading commands on the program
+ * Register paper trading commands on the Commander program
  */
 export function registerPaperTradingCommands(program: Command): void {
   const paper = program.command("paper").description("Paper trading simulation");
 
+  // Start command
   paper
     .command("start")
     .description("Start a new paper trading session")
@@ -43,14 +46,8 @@ export function registerPaperTradingCommands(program: Command): void {
           const config = loadConfig();
           if (!config.hummingbotUrl) {
             spinner.fail(chalk.red("Live mode requires Hummingbot Dashboard"));
-            console.log(
-              chalk.gray(
-                "\nSet HUMMINGBOT_URL in your .env file to enable live prices."
-              )
-            );
-            console.log(
-              chalk.gray("Example: HUMMINGBOT_URL=http://localhost:8000")
-            );
+            console.log(chalk.gray("\nSet HUMMINGBOT_URL in your .env file to enable live prices."));
+            console.log(chalk.gray("Example: HUMMINGBOT_URL=http://localhost:8000"));
             process.exit(1);
           }
 
@@ -60,51 +57,33 @@ export function registerPaperTradingCommands(program: Command): void {
           const healthy = await client.healthCheck();
           if (!healthy) {
             spinner.fail(chalk.red("Cannot connect to Hummingbot Dashboard"));
-            console.log(
-              chalk.gray(
-                `\nMake sure Hummingbot Dashboard is running at ${config.hummingbotUrl}`
-              )
-            );
+            console.log(chalk.gray(`\nMake sure Hummingbot Dashboard is running at ${config.hummingbotUrl}`));
             process.exit(1);
           }
           spinner.text = "Creating paper trading session...";
         }
 
-        const session = await createPaperSession(
-          options.strategy,
-          initialBalance,
-          liveMode
-        );
+        const session = await createPaperSession(options.strategy, initialBalance, liveMode);
 
         spinner.succeed(`Paper trading session created`);
         console.log(chalk.gray("─".repeat(50)));
         console.log(`Session ID:   ${chalk.cyan(session.id)}`);
         console.log(`Strategy:     ${chalk.yellow(session.strategyId)}`);
-        console.log(
-          `Balance:      ${chalk.green("$" + session.balance.toLocaleString())}`
-        );
+        console.log(`Balance:      ${chalk.green("$" + session.balance.toLocaleString())}`);
         console.log(`Status:       ${chalk.green(session.status)}`);
-        console.log(
-          `Price Mode:   ${liveMode ? chalk.cyan("LIVE (from Hummingbot)") : chalk.gray("Manual")}`
-        );
+        console.log(`Price Mode:   ${liveMode ? chalk.cyan("LIVE (from Hummingbot)") : chalk.gray("Manual")}`);
         console.log(chalk.gray("─".repeat(50)));
         console.log(chalk.gray("\nUse these commands to manage your session:"));
-        console.log(
-          `  ${chalk.cyan("donut paper status")} ${session.id.slice(0, 8)}...`
-        );
-        console.log(
-          `  ${chalk.cyan("donut paper trades")} ${session.id.slice(0, 8)}...`
-        );
-        console.log(
-          `  ${chalk.cyan("donut paper stop")} ${session.id.slice(0, 8)}...`
-        );
+        console.log(`  ${chalk.cyan("donut paper status")} ${session.id.slice(0, 8)}...`);
+        console.log(`  ${chalk.cyan("donut paper trades")} ${session.id.slice(0, 8)}...`);
+        console.log(`  ${chalk.cyan("donut paper stop")} ${session.id.slice(0, 8)}...`);
       } catch (error) {
-        spinner.fail("Failed to create paper session");
-        logError(error);
+        spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
         process.exit(1);
       }
     });
 
+  // Status command
   paper
     .command("status [sessionId]")
     .description("Show paper trading session status")
@@ -117,9 +96,7 @@ export function registerPaperTradingCommands(program: Command): void {
         if (sessionId) {
           // Try to find session by ID or partial ID
           const sessions = await listPaperSessions();
-          session = sessions.find(
-            (s) => s.id === sessionId || s.id.startsWith(sessionId)
-          );
+          session = sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
           if (!session) {
             throw new Error(`Session not found: ${sessionId}`);
           }
@@ -128,9 +105,7 @@ export function registerPaperTradingCommands(program: Command): void {
           const sessions = await listPaperSessions();
           if (sessions.length === 0) {
             spinner.fail("No paper trading sessions found");
-            console.log(
-              chalk.gray("\nStart one with: donut paper start --strategy <name>")
-            );
+            console.log(chalk.gray("\nStart one with: donut paper start --strategy <name>"));
             return;
           }
           session = sessions[0];
@@ -142,37 +117,20 @@ export function registerPaperTradingCommands(program: Command): void {
         const totalPnl = session.trades
           .filter((t) => t.pnl !== undefined)
           .reduce((sum, t) => sum + (t.pnl || 0), 0);
-        const returnPct =
-          ((session.balance - session.initialBalance) /
-            session.initialBalance) *
-          100;
+        const returnPct = ((session.balance - session.initialBalance) / session.initialBalance) * 100;
 
         console.log(chalk.bold("\nPaper Trading Session"));
         console.log(chalk.gray("─".repeat(50)));
         console.log(`Session ID:     ${chalk.cyan(session.id)}`);
         console.log(`Strategy:       ${chalk.yellow(session.strategyId)}`);
-        console.log(
-          `Status:         ${session.status === "running" ? chalk.green(session.status) : chalk.yellow(session.status)}`
-        );
-        console.log(
-          `Price Mode:     ${session.liveMode ? chalk.cyan("LIVE") : chalk.gray("Manual")}`
-        );
-        console.log(
-          `Initial:        ${chalk.gray("$" + session.initialBalance.toLocaleString())}`
-        );
-        console.log(
-          `Current:        ${chalk.bold("$" + session.balance.toLocaleString())}`
-        );
-        console.log(
-          `Return:         ${returnPct >= 0 ? chalk.green(returnPct.toFixed(2) + "%") : chalk.red(returnPct.toFixed(2) + "%")}`
-        );
-        console.log(
-          `Realized PnL:   ${totalPnl >= 0 ? chalk.green("$" + totalPnl.toFixed(2)) : chalk.red("$" + totalPnl.toFixed(2))}`
-        );
+        console.log(`Status:         ${session.status === "running" ? chalk.green(session.status) : chalk.yellow(session.status)}`);
+        console.log(`Price Mode:     ${session.liveMode ? chalk.cyan("LIVE") : chalk.gray("Manual")}`);
+        console.log(`Initial:        ${chalk.gray("$" + session.initialBalance.toLocaleString())}`);
+        console.log(`Current:        ${chalk.bold("$" + session.balance.toLocaleString())}`);
+        console.log(`Return:         ${returnPct >= 0 ? chalk.green(returnPct.toFixed(2) + "%") : chalk.red(returnPct.toFixed(2) + "%")}`);
+        console.log(`Realized PnL:   ${totalPnl >= 0 ? chalk.green("$" + totalPnl.toFixed(2)) : chalk.red("$" + totalPnl.toFixed(2))}`);
         console.log(`Trades:         ${chalk.white(session.trades.length.toString())}`);
-        console.log(
-          `Open Positions: ${chalk.white(session.positions.length.toString())}`
-        );
+        console.log(`Open Positions: ${chalk.white(session.positions.length.toString())}`);
 
         if (session.positions.length > 0) {
           console.log(chalk.bold("\nOpen Positions"));
@@ -181,20 +139,20 @@ export function registerPaperTradingCommands(program: Command): void {
             const pnlColor = pos.unrealizedPnl >= 0 ? chalk.green : chalk.red;
             console.log(
               `  ${pos.side === "long" ? chalk.green("LONG") : chalk.red("SHORT")} ` +
-                `${chalk.white(pos.symbol)} ` +
-                `${chalk.gray("size:")} ${pos.size.toFixed(4)} ` +
-                `${chalk.gray("entry:")} $${pos.entryPrice.toFixed(2)} ` +
-                `${chalk.gray("uPnL:")} ${pnlColor("$" + pos.unrealizedPnl.toFixed(2))}`
+              `${chalk.white(pos.symbol)} ` +
+              `${chalk.gray("size:")} ${pos.size.toFixed(4)} ` +
+              `${chalk.gray("entry:")} $${pos.entryPrice.toFixed(2)} ` +
+              `${chalk.gray("uPnL:")} ${pnlColor("$" + pos.unrealizedPnl.toFixed(2))}`
             );
           }
         }
       } catch (error) {
-        spinner.fail("Failed to load session");
-        logError(error);
+        spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
         process.exit(1);
       }
     });
 
+  // Trades command
   paper
     .command("trades [sessionId]")
     .description("List trades for a paper trading session")
@@ -207,9 +165,7 @@ export function registerPaperTradingCommands(program: Command): void {
 
         if (sessionId) {
           const sessions = await listPaperSessions();
-          session = sessions.find(
-            (s) => s.id === sessionId || s.id.startsWith(sessionId)
-          );
+          session = sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
           if (!session) {
             throw new Error(`Session not found: ${sessionId}`);
           }
@@ -237,31 +193,26 @@ export function registerPaperTradingCommands(program: Command): void {
 
         for (const trade of trades) {
           const date = new Date(trade.timestamp).toLocaleString();
-          const sideStr =
-            trade.side === "long" ? chalk.green("LONG ") : chalk.red("SHORT");
-          const pnlStr =
-            trade.pnl !== undefined
-              ? trade.pnl >= 0
-                ? chalk.green(`+$${trade.pnl.toFixed(2)}`)
-                : chalk.red(`-$${Math.abs(trade.pnl).toFixed(2)}`)
-              : chalk.gray("open");
-          const sourceStr =
-            trade.priceSource === "live" ? chalk.cyan("[L]") : chalk.gray("[M]");
+          const sideStr = trade.side === "long" ? chalk.green("LONG ") : chalk.red("SHORT");
+          const pnlStr = trade.pnl !== undefined
+            ? (trade.pnl >= 0 ? chalk.green(`+$${trade.pnl.toFixed(2)}`) : chalk.red(`-$${Math.abs(trade.pnl).toFixed(2)}`))
+            : chalk.gray("open");
+          const sourceStr = trade.priceSource === "live" ? chalk.cyan("[L]") : chalk.gray("[M]");
 
           console.log(
             `${chalk.gray(date)} ${sideStr} ${chalk.white(trade.symbol.padEnd(10))} ` +
-              `${chalk.gray("qty:")} ${trade.size.toFixed(4).padStart(10)} ` +
-              `${chalk.gray("@")} $${trade.entryPrice.toFixed(2).padStart(10)} ${sourceStr} ` +
-              `${chalk.gray("PnL:")} ${pnlStr}`
+            `${chalk.gray("qty:")} ${trade.size.toFixed(4).padStart(10)} ` +
+            `${chalk.gray("@")} $${trade.entryPrice.toFixed(2).padStart(10)} ${sourceStr} ` +
+            `${chalk.gray("PnL:")} ${pnlStr}`
           );
         }
       } catch (error) {
-        spinner.fail("Failed to load trades");
-        logError(error);
+        spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
         process.exit(1);
       }
     });
 
+  // Stop command
   paper
     .command("stop <sessionId>")
     .description("Stop a paper trading session")
@@ -271,9 +222,7 @@ export function registerPaperTradingCommands(program: Command): void {
       try {
         // Find by full or partial ID
         const sessions = await listPaperSessions();
-        const session = sessions.find(
-          (s) => s.id === sessionId || s.id.startsWith(sessionId)
-        );
+        const session = sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
 
         if (!session) {
           throw new Error(`Session not found: ${sessionId}`);
@@ -282,30 +231,23 @@ export function registerPaperTradingCommands(program: Command): void {
         const stopped = await stopPaperSession(session.id);
 
         if (stopped) {
-          const returnPct =
-            ((stopped.balance - stopped.initialBalance) /
-              stopped.initialBalance) *
-            100;
+          const returnPct = ((stopped.balance - stopped.initialBalance) / stopped.initialBalance) * 100;
 
           spinner.succeed("Paper trading session stopped");
           console.log(chalk.gray("─".repeat(50)));
-          console.log(
-            `Final Balance:  ${chalk.bold("$" + stopped.balance.toLocaleString())}`
-          );
-          console.log(
-            `Total Return:   ${returnPct >= 0 ? chalk.green(returnPct.toFixed(2) + "%") : chalk.red(returnPct.toFixed(2) + "%")}`
-          );
+          console.log(`Final Balance:  ${chalk.bold("$" + stopped.balance.toLocaleString())}`);
+          console.log(`Total Return:   ${returnPct >= 0 ? chalk.green(returnPct.toFixed(2) + "%") : chalk.red(returnPct.toFixed(2) + "%")}`);
           console.log(`Total Trades:   ${stopped.trades.length}`);
         } else {
           spinner.fail("Failed to stop session");
         }
       } catch (error) {
-        spinner.fail("Failed to stop session");
-        logError(error);
+        spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
         process.exit(1);
       }
     });
 
+  // List command
   paper
     .command("list")
     .description("List all paper trading sessions")
@@ -317,9 +259,7 @@ export function registerPaperTradingCommands(program: Command): void {
 
         if (sessions.length === 0) {
           spinner.succeed("No paper trading sessions found");
-          console.log(
-            chalk.gray("\nStart one with: donut paper start --strategy <name>")
-          );
+          console.log(chalk.gray("\nStart one with: donut paper start --strategy <name>"));
           return;
         }
 
@@ -327,30 +267,26 @@ export function registerPaperTradingCommands(program: Command): void {
         console.log(chalk.gray("─".repeat(80)));
 
         for (const session of sessions) {
-          const returnPct =
-            ((session.balance - session.initialBalance) /
-              session.initialBalance) *
-            100;
+          const returnPct = ((session.balance - session.initialBalance) / session.initialBalance) * 100;
           const date = new Date(session.startedAt).toLocaleDateString();
-          const statusColor =
-            session.status === "running" ? chalk.green : chalk.yellow;
+          const statusColor = session.status === "running" ? chalk.green : chalk.yellow;
 
           console.log(
             `${chalk.cyan(session.id.slice(0, 8))}... ` +
-              `${statusColor(session.status.padEnd(8))} ` +
-              `${chalk.gray(date)} ` +
-              `${chalk.yellow(session.strategyId.slice(0, 15).padEnd(15))} ` +
-              `${chalk.gray("$")}${session.balance.toFixed(0).padStart(8)} ` +
-              `${returnPct >= 0 ? chalk.green(("+" + returnPct.toFixed(1) + "%").padStart(8)) : chalk.red((returnPct.toFixed(1) + "%").padStart(8))}`
+            `${statusColor(session.status.padEnd(8))} ` +
+            `${chalk.gray(date)} ` +
+            `${chalk.yellow(session.strategyId.slice(0, 15).padEnd(15))} ` +
+            `${chalk.gray("$")}${session.balance.toFixed(0).padStart(8)} ` +
+            `${returnPct >= 0 ? chalk.green(("+" + returnPct.toFixed(1) + "%").padStart(8)) : chalk.red((returnPct.toFixed(1) + "%").padStart(8))}`
           );
         }
       } catch (error) {
-        spinner.fail("Failed to list sessions");
-        logError(error);
+        spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
         process.exit(1);
       }
     });
 
+  // Compare command
   paper
     .command("compare <sessionId> <backtestRunId>")
     .description("Compare paper trading results with backtest predictions")
@@ -369,9 +305,7 @@ export function registerPaperTradingCommands(program: Command): void {
 
         // Find paper session
         const sessions = await listPaperSessions();
-        const session = sessions.find(
-          (s) => s.id === sessionId || s.id.startsWith(sessionId)
-        );
+        const session = sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
         if (!session) {
           spinner.fail(chalk.red(`Paper session not found: ${sessionId}`));
           process.exit(1);
@@ -379,9 +313,7 @@ export function registerPaperTradingCommands(program: Command): void {
 
         // Fetch backtest metrics
         spinner.text = "Fetching backtest metrics...";
-        const hbClient = new HummingbotClient({
-          baseUrl: config.hummingbotUrl,
-        });
+        const hbClient = new HummingbotClient({ baseUrl: config.hummingbotUrl });
         const backtestMetrics = await hbClient.getBacktestMetrics(backtestRunId);
 
         // Calculate paper metrics
@@ -390,11 +322,7 @@ export function registerPaperTradingCommands(program: Command): void {
         spinner.succeed("Comparison data loaded");
 
         // Helper function to calculate delta and format
-        const formatDelta = (
-          paper: number,
-          backtest: number,
-          inverse: boolean = false
-        ): string => {
+        const formatDelta = (paper: number, backtest: number, _suffix: string = "", inverse: boolean = false): string => {
           if (backtest === 0) return chalk.gray("N/A");
           const delta = ((paper - backtest) / Math.abs(backtest)) * 100;
           const isSignificant = Math.abs(delta) > 20;
@@ -402,24 +330,12 @@ export function registerPaperTradingCommands(program: Command): void {
           const formatted = `${sign}${delta.toFixed(1)}%`;
           // For metrics where lower is better (like drawdown), inverse the color logic
           if (inverse) {
-            return isSignificant
-              ? delta > 0
-                ? chalk.red(formatted)
-                : chalk.green(formatted)
-              : chalk.yellow(formatted);
+            return isSignificant ? (delta > 0 ? chalk.red(formatted) : chalk.green(formatted)) : chalk.yellow(formatted);
           }
-          return isSignificant
-            ? delta < 0
-              ? chalk.red(formatted)
-              : chalk.green(formatted)
-            : chalk.yellow(formatted);
+          return isSignificant ? (delta < 0 ? chalk.red(formatted) : chalk.green(formatted)) : chalk.yellow(formatted);
         };
 
-        const formatValue = (
-          value: number,
-          suffix: string = "",
-          decimals: number = 2
-        ): string => {
+        const formatValue = (value: number, suffix: string = "", decimals: number = 2): string => {
           return value.toFixed(decimals) + suffix;
         };
 
@@ -433,125 +349,83 @@ export function registerPaperTradingCommands(program: Command): void {
         // Table header
         console.log(
           chalk.bold("Metric".padEnd(20)) +
-            chalk.cyan("Paper".padStart(15)) +
-            chalk.magenta("Backtest".padStart(15)) +
-            chalk.yellow("Delta".padStart(15))
+          chalk.cyan("Paper".padStart(15)) +
+          chalk.magenta("Backtest".padStart(15)) +
+          chalk.yellow("Delta".padStart(15))
         );
         console.log(chalk.gray("─".repeat(70)));
 
         // Total Return
         console.log(
           "Total Return".padEnd(20) +
-            chalk.cyan(
-              formatValue(paperMetrics.totalReturnPct, "%").padStart(15)
-            ) +
-            chalk.magenta(
-              formatValue(backtestMetrics.totalReturnPct, "%").padStart(15)
-            ) +
-            formatDelta(
-              paperMetrics.totalReturnPct,
-              backtestMetrics.totalReturnPct
-            ).padStart(15)
+          chalk.cyan(formatValue(paperMetrics.totalReturnPct, "%").padStart(15)) +
+          chalk.magenta(formatValue(backtestMetrics.totalReturnPct, "%").padStart(15)) +
+          formatDelta(paperMetrics.totalReturnPct, backtestMetrics.totalReturnPct).padStart(15)
         );
 
         // Win Rate
         console.log(
           "Win Rate".padEnd(20) +
-            chalk.cyan(
-              formatValue(paperMetrics.winRate * 100, "%", 1).padStart(15)
-            ) +
-            chalk.magenta(
-              formatValue(backtestMetrics.winRate * 100, "%", 1).padStart(15)
-            ) +
-            formatDelta(
-              paperMetrics.winRate * 100,
-              backtestMetrics.winRate * 100
-            ).padStart(15)
+          chalk.cyan(formatValue(paperMetrics.winRate * 100, "%", 1).padStart(15)) +
+          chalk.magenta(formatValue(backtestMetrics.winRate * 100, "%", 1).padStart(15)) +
+          formatDelta(paperMetrics.winRate * 100, backtestMetrics.winRate * 100).padStart(15)
         );
 
         // Max Drawdown (inverse - lower is better)
         console.log(
           "Max Drawdown".padEnd(20) +
-            chalk.cyan(
-              formatValue(-paperMetrics.maxDrawdownPct, "%").padStart(15)
-            ) +
-            chalk.magenta(
-              formatValue(-backtestMetrics.maxDrawdownPct, "%").padStart(15)
-            ) +
-            formatDelta(
-              paperMetrics.maxDrawdownPct,
-              backtestMetrics.maxDrawdownPct,
-              true
-            ).padStart(15)
+          chalk.cyan(formatValue(-paperMetrics.maxDrawdownPct, "%").padStart(15)) +
+          chalk.magenta(formatValue(-backtestMetrics.maxDrawdownPct, "%").padStart(15)) +
+          formatDelta(paperMetrics.maxDrawdownPct, backtestMetrics.maxDrawdownPct, "%", true).padStart(15)
         );
 
         // Sharpe Ratio
         console.log(
           "Sharpe Ratio".padEnd(20) +
-            chalk.cyan(formatValue(paperMetrics.sharpeRatio, "").padStart(15)) +
-            chalk.magenta(
-              formatValue(backtestMetrics.sharpeRatio, "").padStart(15)
-            ) +
-            formatDelta(
-              paperMetrics.sharpeRatio,
-              backtestMetrics.sharpeRatio
-            ).padStart(15)
+          chalk.cyan(formatValue(paperMetrics.sharpeRatio, "").padStart(15)) +
+          chalk.magenta(formatValue(backtestMetrics.sharpeRatio, "").padStart(15)) +
+          formatDelta(paperMetrics.sharpeRatio, backtestMetrics.sharpeRatio).padStart(15)
         );
 
         // Profit Factor
         console.log(
           "Profit Factor".padEnd(20) +
-            chalk.cyan(formatValue(paperMetrics.profitFactor, "").padStart(15)) +
-            chalk.magenta(
-              formatValue(backtestMetrics.profitFactor, "").padStart(15)
-            ) +
-            formatDelta(
-              paperMetrics.profitFactor,
-              backtestMetrics.profitFactor
-            ).padStart(15)
+          chalk.cyan(formatValue(paperMetrics.profitFactor, "").padStart(15)) +
+          chalk.magenta(formatValue(backtestMetrics.profitFactor, "").padStart(15)) +
+          formatDelta(paperMetrics.profitFactor, backtestMetrics.profitFactor).padStart(15)
         );
 
         // Trade Count
         console.log(
           "Trades".padEnd(20) +
-            chalk.cyan(paperMetrics.trades.toString().padStart(15)) +
-            chalk.magenta(backtestMetrics.trades.toString().padStart(15)) +
-            formatDelta(paperMetrics.trades, backtestMetrics.trades).padStart(15)
+          chalk.cyan(paperMetrics.trades.toString().padStart(15)) +
+          chalk.magenta(backtestMetrics.trades.toString().padStart(15)) +
+          formatDelta(paperMetrics.trades, backtestMetrics.trades).padStart(15)
         );
 
         // Average Win
         console.log(
           "Avg Win".padEnd(20) +
-            chalk.cyan(formatValue(paperMetrics.avgWin, "%").padStart(15)) +
-            chalk.magenta(formatValue(backtestMetrics.avgWin, "%").padStart(15)) +
-            formatDelta(paperMetrics.avgWin, backtestMetrics.avgWin).padStart(15)
+          chalk.cyan(formatValue(paperMetrics.avgWin, "%").padStart(15)) +
+          chalk.magenta(formatValue(backtestMetrics.avgWin, "%").padStart(15)) +
+          formatDelta(paperMetrics.avgWin, backtestMetrics.avgWin).padStart(15)
         );
 
         // Average Loss
         console.log(
           "Avg Loss".padEnd(20) +
-            chalk.cyan(formatValue(-paperMetrics.avgLoss, "%").padStart(15)) +
-            chalk.magenta(
-              formatValue(-backtestMetrics.avgLoss, "%").padStart(15)
-            ) +
-            formatDelta(
-              paperMetrics.avgLoss,
-              backtestMetrics.avgLoss,
-              true
-            ).padStart(15)
+          chalk.cyan(formatValue(-paperMetrics.avgLoss, "%").padStart(15)) +
+          chalk.magenta(formatValue(-backtestMetrics.avgLoss, "%").padStart(15)) +
+          formatDelta(paperMetrics.avgLoss, backtestMetrics.avgLoss, "%", true).padStart(15)
         );
 
         console.log(chalk.gray("─".repeat(70)));
-        console.log(
-          chalk.gray("\nLegend: Delta > 20% highlighted (") +
-            chalk.green("green") +
-            chalk.gray(" = paper outperformed, ") +
-            chalk.red("red") +
-            chalk.gray(" = paper underperformed)")
-        );
+        console.log(chalk.gray("\nLegend: Delta > 20% highlighted (") +
+          chalk.green("green") + chalk.gray(" = paper outperformed, ") +
+          chalk.red("red") + chalk.gray(" = paper underperformed)"));
+
       } catch (error) {
-        spinner.fail("Failed to compare");
-        logError(error);
+        spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
         process.exit(1);
       }
     });

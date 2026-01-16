@@ -18,6 +18,34 @@ import { HummingbotClient } from "../integrations/hummingbot-client.js";
 
 const PAPER_SESSIONS_DIR = ".sessions/paper";
 
+// ============================================================================
+// Security: Session ID Validation
+// ============================================================================
+
+/**
+ * Valid session ID pattern: UUID format or alphanumeric with hyphens
+ * Prevents path traversal attacks
+ */
+const PAPER_SESSION_ID_PATTERN = /^[a-fA-F0-9-]+$/;
+
+/**
+ * Validate paper session ID format to prevent path traversal
+ * @throws Error if session ID contains invalid characters
+ */
+function validatePaperSessionId(sessionId: string): void {
+  if (!PAPER_SESSION_ID_PATTERN.test(sessionId)) {
+    throw new Error(
+      `Invalid paper session ID format: "${sessionId}". ` +
+      `Session IDs must be valid UUIDs or alphanumeric with hyphens.`
+    );
+  }
+
+  // Additional check: no directory traversal patterns
+  if (sessionId.includes("..") || sessionId.includes("/") || sessionId.includes("\\")) {
+    throw new Error(`Path traversal attempt detected in session ID: "${sessionId}"`);
+  }
+}
+
 /**
  * Create a new paper trading session
  */
@@ -524,12 +552,38 @@ export function calculatePaperMetrics(session: PaperSession): PaperTradingMetric
 // Internal Helpers
 // ============================================================================
 
+/**
+ * Get file path for a paper session with security validation
+ */
 function getSessionPath(sessionId: string): string {
-  return path.join(PAPER_SESSIONS_DIR, `${sessionId}.json`);
+  // Security: Validate session ID format
+  validatePaperSessionId(sessionId);
+
+  const resolvedSessionDir = path.resolve(PAPER_SESSIONS_DIR);
+  const filePath = path.resolve(resolvedSessionDir, `${sessionId}.json`);
+
+  // Security: Ensure resolved path is within session directory
+  if (!filePath.startsWith(resolvedSessionDir + path.sep)) {
+    throw new Error(
+      `Security violation: Path traversal detected. ` +
+      `File path "${filePath}" is outside paper sessions directory.`
+    );
+  }
+
+  return filePath;
 }
 
 async function ensurePaperSessionsDir(): Promise<void> {
-  await fs.mkdir(PAPER_SESSIONS_DIR, { recursive: true });
+  try {
+    await fs.mkdir(PAPER_SESSIONS_DIR, { recursive: true });
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code !== "EEXIST") {
+      throw new Error(
+        `Failed to create paper sessions directory: ${nodeError.message}`
+      );
+    }
+  }
 }
 
 async function saveSession(session: PaperSession): Promise<void> {

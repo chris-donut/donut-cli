@@ -7,6 +7,8 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1405 | 10:18 PM | 🔵 | Git Status Shows 14 Modified Files and 3 New Files | ~489 |
+| #1360 | 10:09 PM | 🔵 | Environment Variable Configuration System | ~702 |
 | #1140 | 8:35 PM | 🔵 | Donut CLI Type System and Hook Integration Architecture Analysis | ~1664 |
 | #1136 | 8:33 PM | 🔵 | HummingbotClient: HTTP Wrapper for Hummingbot Dashboard REST API | ~1031 |
 | #987 | 5:56 PM | 🟣 | Hummingbot Integration Files Created in Project Structure | ~541 |

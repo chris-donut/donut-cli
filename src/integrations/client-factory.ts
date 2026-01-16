@@ -1,168 +1,241 @@
 /**
- * Client Factory - Centralized creation of backend clients
+ * Client Factory - Singleton Factory for Backend Clients
  *
- * Provides a single point of control for creating and managing
- * backend client instances based on configuration.
+ * Provides centralized creation and caching of API client instances.
+ * Prevents duplicate connections and enables consistent configuration.
+ *
+ * Features:
+ * - Singleton pattern with per-config caching
+ * - Lazy initialization
+ * - Type-safe client retrieval
+ * - Health check utilities
  */
 
 import { HummingbotClient, HummingbotClientConfig } from "./hummingbot-client.js";
 import { NofxClient, NofxClientConfig } from "./nofx-client.js";
-import { TelegramClientConfig } from "./telegram-client.js";
-import { ConfigError } from "../core/errors.js";
-import { TerminalConfig } from "../core/types.js";
+import {
+  TelegramClientConfig,
+  sendMessage,
+  sendTradeApproval,
+  validateCredentials,
+} from "./telegram-client.js";
+import { loadConfig } from "../core/config.js";
+import { TradeApprovalRequest } from "../core/types.js";
 
 // ============================================================================
-// Client Types
+// Telegram Client Wrapper
 // ============================================================================
-
-export type BackendType = "hummingbot" | "nofx";
-export type ClientType = "hummingbot" | "nofx" | "telegram";
-
-// ============================================================================
-// Client Registry (Singleton instances)
-// ============================================================================
-
-const clientRegistry: Map<string, unknown> = new Map();
 
 /**
- * Generate a unique key for client caching
+ * Wrapper class for Telegram functions to provide consistent interface
  */
-function getClientKey(type: ClientType, baseUrl: string): string {
-  return `${type}:${baseUrl}`;
+export class TelegramClient {
+  private config: TelegramClientConfig;
+
+  constructor(config: TelegramClientConfig) {
+    this.config = config;
+  }
+
+  async sendMessage(
+    message: string,
+    options?: { parseMode?: "HTML" | "Markdown"; disableNotification?: boolean }
+  ): Promise<{ success: boolean; messageId?: number; error?: string }> {
+    return sendMessage(this.config, message, options);
+  }
+
+  async sendTradeApproval(
+    approval: TradeApprovalRequest
+  ): Promise<{ success: boolean; messageId?: number; error?: string }> {
+    return sendTradeApproval(this.config, approval);
+  }
+
+  async validateCredentials(): Promise<{ valid: boolean; error?: string }> {
+    return validateCredentials(this.config);
+  }
+
+  async healthCheck(): Promise<boolean> {
+    const result = await this.validateCredentials();
+    return result.valid;
+  }
 }
+
+/**
+ * Alias for TelegramClientConfig for consistency
+ */
+export type TelegramConfig = TelegramClientConfig;
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/**
+ * Client types available through the factory
+ */
+export type ClientType = "hummingbot" | "nofx" | "telegram";
+
+/**
+ * Configuration union for all client types
+ */
+export type ClientConfig =
+  | { type: "hummingbot"; config: HummingbotClientConfig }
+  | { type: "nofx"; config: NofxClientConfig }
+  | { type: "telegram"; config: TelegramConfig };
+
+/**
+ * Client instance union
+ */
+export type Client = HummingbotClient | NofxClient | TelegramClient;
+
+// ============================================================================
+// Client Registry (Singleton Cache)
+// ============================================================================
+
+/**
+ * Cache key format: `type:baseUrl` or `type:identifier`
+ */
+function getCacheKey(type: ClientType, identifier: string): string {
+  return `${type}:${identifier}`;
+}
+
+/**
+ * Client cache - stores initialized client instances
+ */
+const clientCache = new Map<string, Client>();
 
 // ============================================================================
 // Factory Functions
 // ============================================================================
 
+// Default URLs for backends
+const DEFAULT_HUMMINGBOT_URL = "http://localhost:8000";
+const DEFAULT_NOFX_URL = "http://localhost:8080";
+
 /**
- * Create or retrieve a HummingbotClient instance
+ * Get or create a Hummingbot client
  */
-export function getHummingbotClient(
-  config: HummingbotClientConfig | TerminalConfig
-): HummingbotClient {
-  const baseUrl = "hummingbotUrl" in config
-    ? config.hummingbotUrl
-    : (config as HummingbotClientConfig).baseUrl;
+export function getHummingbotClient(config?: Partial<HummingbotClientConfig>): HummingbotClient {
+  const appConfig = loadConfig();
+  const baseUrl = config?.baseUrl ?? appConfig.hummingbotUrl ?? DEFAULT_HUMMINGBOT_URL;
+  const timeout = config?.timeout ?? 30000;
 
-  if (!baseUrl) {
-    throw new ConfigError("Hummingbot URL not configured", {
-      hint: "Set HUMMINGBOT_URL in your environment or .env file",
-    });
+  const cacheKey = getCacheKey("hummingbot", baseUrl);
+
+  let client = clientCache.get(cacheKey);
+  if (!client) {
+    client = new HummingbotClient({ baseUrl, timeout });
+    clientCache.set(cacheKey, client);
   }
 
-  const key = getClientKey("hummingbot", baseUrl);
-
-  if (!clientRegistry.has(key)) {
-    const clientConfig: HummingbotClientConfig = {
-      baseUrl,
-      timeout: "timeout" in config ? config.timeout : undefined,
-    };
-    clientRegistry.set(key, new HummingbotClient(clientConfig));
-  }
-
-  return clientRegistry.get(key) as HummingbotClient;
+  return client as HummingbotClient;
 }
 
 /**
- * Create or retrieve a NofxClient instance
+ * Get or create a nofx client
  */
-export function getNofxClient(
-  config: NofxClientConfig | TerminalConfig
-): NofxClient {
-  const baseUrl = "nofxApiUrl" in config
-    ? config.nofxApiUrl
-    : (config as NofxClientConfig).baseUrl;
+export function getNofxClient(config?: Partial<NofxClientConfig>): NofxClient {
+  const appConfig = loadConfig();
+  const baseUrl = config?.baseUrl ?? appConfig.nofxApiUrl ?? DEFAULT_NOFX_URL;
+  const timeout = config?.timeout ?? 30000;
+  const authToken = config?.authToken ?? appConfig.nofxAuthToken;
 
-  if (!baseUrl) {
-    throw new ConfigError("nofx API URL not configured", {
-      hint: "Set NOFX_API_URL in your environment or .env file",
-    });
+  const cacheKey = getCacheKey("nofx", baseUrl);
+
+  let client = clientCache.get(cacheKey);
+  if (!client) {
+    client = new NofxClient({ baseUrl, timeout, authToken });
+    clientCache.set(cacheKey, client);
   }
 
-  const key = getClientKey("nofx", baseUrl);
-
-  if (!clientRegistry.has(key)) {
-    const clientConfig: NofxClientConfig = {
-      baseUrl,
-      timeout: "timeout" in config ? config.timeout : undefined,
-      authToken: "authToken" in config ? config.authToken : undefined,
-    };
-    clientRegistry.set(key, new NofxClient(clientConfig));
-  }
-
-  return clientRegistry.get(key) as NofxClient;
+  return client as NofxClient;
 }
 
 /**
- * Get the appropriate backtest client based on configuration
- * Prefers Hummingbot if available, falls back to nofx
+ * Get or create a Telegram client
  */
-export function getBacktestClient(
-  config: TerminalConfig
-): HummingbotClient | NofxClient {
-  if (config.hummingbotUrl) {
-    return getHummingbotClient(config);
-  }
+export function getTelegramClient(config?: Partial<TelegramConfig>): TelegramClient | null {
+  // Telegram config comes from env directly (not in TerminalConfig)
+  const botToken = config?.botToken ?? process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = config?.chatId ?? process.env.TELEGRAM_CHAT_ID;
 
-  if (config.nofxApiUrl) {
-    return getNofxClient(config);
-  }
-
-  throw new ConfigError("No backtest backend configured", {
-    hint: "Set HUMMINGBOT_URL or NOFX_API_URL in your environment",
-  });
-}
-
-/**
- * Get a Telegram client configuration (not a persistent client)
- */
-export function getTelegramConfig(
-  botToken: string,
-  chatId: string
-): TelegramClientConfig {
+  // Telegram requires both token and chat ID
   if (!botToken || !chatId) {
-    throw new ConfigError("Telegram credentials not configured", {
-      hint: "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID",
-    });
+    return null;
   }
 
-  return { botToken, chatId };
+  const cacheKey = getCacheKey("telegram", `${botToken.slice(-6)}:${chatId}`);
+
+  let client = clientCache.get(cacheKey);
+  if (!client) {
+    client = new TelegramClient({ botToken, chatId });
+    clientCache.set(cacheKey, client);
+  }
+
+  return client as TelegramClient;
 }
 
 // ============================================================================
-// Registry Management
+// Generic Factory
 // ============================================================================
 
 /**
- * Clear all cached client instances
- * Useful for testing or reconnection scenarios
+ * Generic factory function for creating clients by type
  */
-export function clearClientRegistry(): void {
-  clientRegistry.clear();
+export function createClient<T extends ClientType>(
+  type: T,
+  config?: T extends "hummingbot"
+    ? Partial<HummingbotClientConfig>
+    : T extends "nofx"
+      ? Partial<NofxClientConfig>
+      : Partial<TelegramConfig>
+): T extends "hummingbot"
+  ? HummingbotClient
+  : T extends "nofx"
+    ? NofxClient
+    : TelegramClient | null {
+  switch (type) {
+    case "hummingbot":
+      return getHummingbotClient(config as Partial<HummingbotClientConfig>) as ReturnType<typeof createClient<T>>;
+    case "nofx":
+      return getNofxClient(config as Partial<NofxClientConfig>) as ReturnType<typeof createClient<T>>;
+    case "telegram":
+      return getTelegramClient(config as Partial<TelegramConfig>) as ReturnType<typeof createClient<T>>;
+    default:
+      throw new Error(`Unknown client type: ${type}`);
+  }
+}
+
+// ============================================================================
+// Cache Management
+// ============================================================================
+
+/**
+ * Clear all cached clients
+ */
+export function clearClientCache(): void {
+  clientCache.clear();
 }
 
 /**
- * Remove a specific client from the registry
+ * Clear a specific client from cache
  */
-export function removeClient(type: ClientType, baseUrl: string): boolean {
-  const key = getClientKey(type, baseUrl);
-  return clientRegistry.delete(key);
+export function clearClient(type: ClientType, identifier: string): boolean {
+  const cacheKey = getCacheKey(type, identifier);
+  return clientCache.delete(cacheKey);
 }
 
 /**
- * Check if a client exists in the registry
+ * Get number of cached clients
  */
-export function hasClient(type: ClientType, baseUrl: string): boolean {
-  const key = getClientKey(type, baseUrl);
-  return clientRegistry.has(key);
+export function getCacheSize(): number {
+  return clientCache.size;
 }
 
 /**
- * Get the number of cached clients
+ * Check if a client is cached
  */
-export function getClientCount(): number {
-  return clientRegistry.size;
+export function isClientCached(type: ClientType, identifier: string): boolean {
+  const cacheKey = getCacheKey(type, identifier);
+  return clientCache.has(cacheKey);
 }
 
 // ============================================================================
@@ -170,51 +243,83 @@ export function getClientCount(): number {
 // ============================================================================
 
 /**
+ * Health check result for a backend
+ */
+export interface BackendHealth {
+  type: ClientType;
+  available: boolean;
+  latencyMs?: number;
+  error?: string;
+}
+
+/**
+ * Check health of a specific backend
+ */
+export async function checkBackendHealth(type: ClientType): Promise<BackendHealth> {
+  const startTime = Date.now();
+
+  try {
+    let client: Client | null;
+
+    switch (type) {
+      case "hummingbot":
+        client = getHummingbotClient();
+        break;
+      case "nofx":
+        client = getNofxClient();
+        break;
+      case "telegram":
+        client = getTelegramClient();
+        break;
+      default:
+        return { type, available: false, error: `Unknown client type: ${type}` };
+    }
+
+    if (!client) {
+      return { type, available: false, error: "Client not configured" };
+    }
+
+    // Perform health check
+    const isHealthy = await (client as HummingbotClient | NofxClient).healthCheck?.() ?? false;
+    const latencyMs = Date.now() - startTime;
+
+    return {
+      type,
+      available: isHealthy,
+      latencyMs,
+      error: isHealthy ? undefined : "Health check failed",
+    };
+  } catch (error) {
+    return {
+      type,
+      available: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
  * Check health of all configured backends
  */
-export async function checkAllBackends(config: TerminalConfig): Promise<{
-  hummingbot: boolean | null;
-  nofx: boolean | null;
-}> {
-  const results: { hummingbot: boolean | null; nofx: boolean | null } = {
-    hummingbot: null,
-    nofx: null,
-  };
-
-  if (config.hummingbotUrl) {
-    try {
-      const client = getHummingbotClient(config);
-      results.hummingbot = await client.healthCheck();
-    } catch {
-      results.hummingbot = false;
-    }
-  }
-
-  if (config.nofxApiUrl) {
-    try {
-      const client = getNofxClient(config);
-      results.nofx = await client.healthCheck();
-    } catch {
-      results.nofx = false;
-    }
-  }
-
+export async function checkAllBackendsHealth(): Promise<BackendHealth[]> {
+  const types: ClientType[] = ["hummingbot", "nofx", "telegram"];
+  const results = await Promise.all(types.map(checkBackendHealth));
   return results;
 }
 
 /**
- * Get the first healthy backend
+ * Get the preferred available backend for backtesting
  */
-export async function getHealthyBackend(
-  config: TerminalConfig
-): Promise<BackendType | null> {
-  const health = await checkAllBackends(config);
-
-  if (health.hummingbot === true) {
+export async function getPreferredBacktestBackend(): Promise<"hummingbot" | "nofx" | null> {
+  // Check hummingbot first (preferred)
+  const hbHealth = await checkBackendHealth("hummingbot");
+  if (hbHealth.available) {
     return "hummingbot";
   }
 
-  if (health.nofx === true) {
+  // Fall back to nofx
+  const nofxHealth = await checkBackendHealth("nofx");
+  if (nofxHealth.available) {
     return "nofx";
   }
 

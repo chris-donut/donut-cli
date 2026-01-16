@@ -1,119 +1,173 @@
 {
-  "project": "Donut CLI - Phase 4 Thesis Trading Layer",
-  "branchName": "ralph/thesis-trading-layer",
-  "description": "Thesis-driven trading infrastructure: formal thesis management, conviction tracking, invalidation alerts, and thesis performance analytics for conviction-based traders.",
+  "project": "Donut CLI - Dexter-Inspired Phase 1 Foundation",
+  "branchName": "ralph/dexter-phase1-foundation",
+  "description": "Foundation improvements inspired by Dexter agent architecture: modularize CLI, add structured logging, retry logic, and graceful shutdown for production readiness.",
   "userStories": [
     {
-      "id": "TH-001",
-      "title": "Create Thesis Schema and Types",
-      "description": "As a thesis trader, I want a formal data model for trading theses so that I can track my convictions systematically",
+      "id": "DX-001",
+      "title": "Create CLI Command Module Structure",
+      "description": "As a developer, I want CLI commands organized into modules so that the codebase is maintainable",
       "acceptanceCriteria": [
-        "Create src/thesis/types.ts with TradingThesis interface",
-        "Include fields: id, title, timeframe (weeks/months/years), conviction (0-100)",
-        "Include keyAssumptions array of strings",
-        "Include invalidationSignals array of strings",
-        "Include targetAllocation percentage (0-100)",
-        "Include status enum: draft, active, invalidated, closed",
-        "Include linkedPositions array of position IDs",
-        "Add Zod schemas for runtime validation",
-        "Export ThesisStatus enum and all types",
+        "Create src/cli/ directory with index.ts entry point",
+        "Create src/cli/commands/ directory for command modules",
+        "Move session commands (start, resume, status) to src/cli/commands/session.ts",
+        "Export registerSessionCommands(program) function",
+        "Main index.ts imports and calls register functions",
+        "All existing session commands work identically",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Implemented in src/thesis/types.ts with comprehensive Zod schemas"
+      "notes": "Session commands extracted to src/cli/commands/session.ts, theme.ts created, index.ts reduced from 1350 to 1185 lines"
     },
     {
-      "id": "TH-002",
-      "title": "Create Thesis MCP Server",
-      "description": "As a thesis trader, I want MCP tools to manage my theses so that AI agents can help track them",
+      "id": "DX-002",
+      "title": "Extract Paper Trading Commands to Module",
+      "description": "As a developer, I want paper trading commands in a separate module for better organization",
       "acceptanceCriteria": [
-        "Create src/mcp-servers/thesis-server.ts",
-        "Implement thesis_create tool to create new thesis",
-        "Implement thesis_update tool to modify thesis fields",
-        "Implement thesis_list tool to list all theses by status",
-        "Implement thesis_get tool to retrieve thesis details",
-        "Implement thesis_link_position tool to associate positions with thesis",
-        "Store theses in .sessions/theses/ as JSON files",
-        "Export createThesisMcpServer factory function",
+        "Create src/cli/commands/paper-trading.ts",
+        "Move all 'paper' subcommands (start, status, trades, stop, list, compare)",
+        "Export registerPaperTradingCommands(program) function",
+        "Import paperTradingManager and hummingbotClient as needed",
+        "All paper trading commands work identically",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Implemented in src/mcp-servers/thesis-server.ts with 6 MCP tools"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "TH-003",
-      "title": "Create Thesis Analyst Agent",
-      "description": "As a thesis trader, I want an AI agent that monitors if my thesis still holds",
+      "id": "DX-003",
+      "title": "Extract Notification Commands to Module",
+      "description": "As a developer, I want notification commands in a separate module",
       "acceptanceCriteria": [
-        "Create src/agents/thesis-analyst.ts extending BaseAgent",
-        "Implement analyzeThesis(thesisId) method",
-        "Check each keyAssumption against current market data",
-        "Check invalidationSignals against recent events",
-        "Return ThesisHealth object with assumptionStatuses and overallHealth score",
-        "Include recommendations (hold, reduce, close, increase)",
-        "Add agent to orchestrator's available specialists",
+        "Create src/cli/commands/notifications.ts",
+        "Move all 'notify' subcommands (setup, test, status)",
+        "Export registerNotificationCommands(program) function",
+        "Handle config file operations within the module",
+        "All notification commands work identically",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Implemented in src/agents/thesis-analyst.ts with health checking and recommendations"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "TH-004",
-      "title": "Implement Invalidation Alert System",
-      "description": "As a thesis trader, I want alerts when my thesis assumptions break",
+      "id": "DX-004",
+      "title": "Extract Demo Commands to Module",
+      "description": "As a developer, I want demo commands in a separate module",
       "acceptanceCriteria": [
-        "Create src/thesis/invalidation-monitor.ts",
-        "Define InvalidationAlert type with thesisId, signal, severity, timestamp",
-        "Implement checkInvalidationSignals(thesis) function",
-        "Support price-based signals (symbol breaks $X level)",
-        "Support time-based signals (thesis older than timeframe)",
-        "Support conviction-based signals (conviction dropped below threshold)",
-        "Return array of triggered InvalidationAlerts",
-        "Integrate with thesis_check MCP tool",
+        "Create src/cli/commands/demo.ts",
+        "Move all 'demo' subcommands (tour, strategies, backtest, trades, runs)",
+        "Export registerDemoCommands(program) function",
+        "Import demo mode generators as needed",
+        "All demo commands work identically",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Implemented in src/thesis/invalidation-monitor.ts with price, time, conviction-based signals"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "TH-005",
-      "title": "Create Conviction Tracker",
-      "description": "As a thesis trader, I want to track how my conviction evolves over time",
+      "id": "DX-005",
+      "title": "Extract Strategy and Backtest Commands to Modules",
+      "description": "As a developer, I want strategy and backtest commands in separate modules",
       "acceptanceCriteria": [
-        "Create src/thesis/conviction-tracker.ts",
-        "Define ConvictionChange type with thesisId, oldConviction, newConviction, reason, timestamp",
-        "Implement recordConvictionChange(thesisId, newConviction, reason) function",
-        "Implement getConvictionHistory(thesisId) returning chronological changes",
-        "Implement detectMismatch(thesis) comparing conviction to position sizing",
-        "Add mismatchScore: high conviction + small position = underexposed",
-        "Persist conviction history to .sessions/conviction-history.json",
+        "Create src/cli/commands/strategy.ts with build command",
+        "Create src/cli/commands/backtest.ts with run, status, analyze commands",
+        "Export registerStrategyCommands and registerBacktestCommands functions",
+        "Update main index.ts to be under 200 lines",
+        "All commands work identically",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Implemented in src/thesis/conviction-tracker.ts with mismatch detection and trend analysis"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "TH-006",
-      "title": "Create Thesis Performance Analytics",
-      "description": "As a thesis trader, I want to analyze which theses performed best historically",
+      "id": "DX-006",
+      "title": "Add Structured Logging with Pino",
+      "description": "As a developer, I want structured logging so that I can debug issues in production",
       "acceptanceCriteria": [
-        "Create src/analytics/thesis-performance.ts",
-        "Define ThesisPerformance type with thesisId, totalPnl, roiPercent, duration, wasCorrect",
-        "Implement calculateThesisPerformance(thesis) aggregating linked position PnL",
-        "Implement rankThesesByPerformance() returning sorted list",
-        "Implement analyzeThesisOutcomes() returning accuracy rate by timeframe",
-        "Calculate conviction calibration: was high conviction = high returns?",
-        "Export formatThesisPerformanceReport() for readable output",
+        "Add pino and pino-pretty as dependencies",
+        "Create src/core/logger.ts with configured Pino logger",
+        "Support LOG_LEVEL environment variable (debug, info, warn, error)",
+        "Export logger instance and convenience functions (info, debug, error, warn)",
+        "Add child logger creation for component-specific logging",
+        "Replace console.log in one module (paper-trading.ts) with logger calls",
         "Typecheck passes"
       ],
       "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DX-007",
+      "title": "Implement Retry Logic with Exponential Backoff",
+      "description": "As a trader, I want API calls to retry on failure so that transient errors don't stop execution",
+      "acceptanceCriteria": [
+        "Create src/utils/retry.ts with withRetry<T> function",
+        "Support configurable maxRetries (default 3), baseDelay (default 1000ms)",
+        "Implement exponential backoff: delay * 2^attempt",
+        "Add optional shouldRetry predicate for custom retry logic",
+        "Add RetryableError class for explicit retry requests",
+        "Apply retry logic to HummingbotClient.getCurrentPrice()",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DX-008",
+      "title": "Add Graceful Shutdown Handler",
+      "description": "As a developer, I want graceful shutdown so that sessions are saved on exit",
+      "acceptanceCriteria": [
+        "Create src/core/shutdown.ts with registerShutdownHandler function",
+        "Handle SIGINT and SIGTERM signals",
+        "Save any pending session state before exit",
+        "Log shutdown initiation and completion",
+        "Support async cleanup callbacks",
+        "Register handler in main CLI entry point",
+        "Ctrl+C during operation saves state before exiting",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DX-009",
+      "title": "Add Custom Error Classes with Context",
+      "description": "As a developer, I want rich error context so that I can debug issues effectively",
+      "acceptanceCriteria": [
+        "Create src/core/errors.ts with DonutError base class",
+        "Include error code, context object, and cause chain",
+        "Create specific errors: NetworkError, ConfigError, ValidationError",
+        "Add toJSON() method for structured logging",
+        "Replace one error throw in hummingbot-client.ts with DonutError",
+        "Typecheck passes"
+      ],
+      "priority": 9,
       "passes": true,
-      "notes": "Implemented in src/analytics/thesis-performance.ts with calibration analysis and performance reports"
+      "notes": "Already implemented - DonutError, ConfigError, ApiError, ValidationError, SessionError, AgentError, RiskError, NotImplementedError all exist with formatError, logError, withRetry utilities"
+    },
+    {
+      "id": "DX-010",
+      "title": "Add Tool Event System Foundation",
+      "description": "As a developer, I want tool execution events so that the TUI can show real-time progress",
+      "acceptanceCriteria": [
+        "Create src/core/events.ts with EventBus class",
+        "Define ToolEvent union type (tool:start, tool:end, tool:error)",
+        "Support typed event subscription with on<T>(type, handler)",
+        "Support one-time listeners with once<T>(type, handler)",
+        "Add global eventBus singleton export",
+        "Emit tool:start event from one MCP server tool call",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
