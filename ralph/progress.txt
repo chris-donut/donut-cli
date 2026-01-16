@@ -168,5 +168,19 @@ Thread: https://ampcode.com/threads/T-019bc49b-2767-7242-be85-4a5552f42d47
   - processMessage() signature changed to accept `stage` parameter for ToolExecutionContext
   - High-risk tools defined in types.ts: donut_execute_trade, donut_place_order, etc.
   - Clear blockedTools at start of each run() to avoid stale state
+  - MCP Server Pattern: Use global pool/client with init function, graceful fallback when unavailable
+
+---
+
+### 2026-01-15 21:30 - US-014
+Thread: https://ampcode.com/threads/T-019bc49f-1010-7729-909c-d8d33dfd81ae
+- **What was implemented**: PostgreSQL MCP Server for decision persistence
+- **Files changed**: src/mcp-servers/postgres-server.ts (new), package.json
+- **Learnings for future iterations:**
+  - pg Pool with connection string from DATABASE_URL env var
+  - Graceful fallback: check `isAvailable` flag before queries, return error JSON instead of throwing
+  - Use `ON CONFLICT ... DO UPDATE` for upsert pattern in state_save
+  - Table creation with `IF NOT EXISTS` in ensureTables() called during init
+  - Tool return pattern: always return `{ success, ... }` for consistent handling
 
 ---
