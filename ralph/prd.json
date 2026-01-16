@@ -1,197 +1,106 @@
 {
-  "project": "Donut CLI - MVP Phase 1",
-  "branchName": "ralph/mvp-paper-trading-notifications",
-  "description": "Implement MVP features: Paper Trading Mode with live data simulation, Telegram notifications with remote approval, and built-in demo mode for onboarding.",
+  "project": "Donut CLI - Phase 2 Completion + Phase 3 Intelligence Layer",
+  "branchName": "ralph/phase2-phase3-intelligence",
+  "description": "Complete Phase 2 Multi-Agent Foundation (risk hook wiring, PostgreSQL MCP) and implement Phase 3 Intelligence Layer (regime detection, performance attribution, confidence calibration, trade journal).",
   "userStories": [
     {
-      "id": "US-001",
-      "title": "Add Paper Trading Types and Schemas",
-      "description": "As a developer, I want paper trading types defined in core/types.ts so that the paper trading system has proper type safety",
+      "id": "US-013",
+      "title": "Wire RiskManager into BaseAgent Tool Execution",
+      "description": "As a trader, I want risk checks to run automatically before trade execution so that position limits are enforced",
       "acceptanceCriteria": [
-        "Add PaperSession interface with id, strategyId, balance, positions, trades, startedAt, status fields",
-        "Add PaperTrade interface with id, symbol, side, size, entryPrice, exitPrice, pnl, timestamp fields",
-        "Add PaperPosition interface with symbol, side, size, entryPrice, unrealizedPnl fields",
-        "Add PaperSessionStatus enum with 'running', 'paused', 'stopped' values",
-        "Export all new types from types.ts",
+        "Import RiskManager in base-agent.ts",
+        "Add preToolUse hook call in processMessage() before tool execution",
+        "Block high-risk tools if RiskManager returns { allowed: false }",
+        "Log blocked trades with reason to console",
+        "Add postToolUse hook call after successful tool execution",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Completed - Added PaperSession, PaperTrade, PaperPosition schemas with Zod validation"
+      "notes": "Completed - getRiskManager() integrated with preToolUseHook/postToolUseHook, blockedTools set tracking"
     },
     {
-      "id": "US-002",
-      "title": "Add Notification Types and Schemas",
-      "description": "As a developer, I want notification types defined so that Telegram and other channels have proper type definitions",
+      "id": "US-014",
+      "title": "Create PostgreSQL MCP Server for Decision Persistence",
+      "description": "As a developer, I want a PostgreSQL MCP server so that agent decisions and state can be persisted",
       "acceptanceCriteria": [
-        "Add NotificationChannel type with 'telegram', 'discord', 'webhook' options",
-        "Add NotificationConfig interface with channel, enabled, settings fields",
-        "Add TelegramConfig interface with botToken, chatId fields",
-        "Add TradeApprovalRequest interface with tradeId (UUID), symbol, side, size, price, expiresAt fields",
-        "Add ApprovalResponse type with 'APPROVE', 'REJECT', 'EXPIRED' options",
+        "Create src/mcp-servers/postgres-server.ts",
+        "Add pg and @types/pg dependencies",
+        "Implement decision_log tool to insert decision records",
+        "Implement decision_query tool to retrieve past decisions",
+        "Implement state_save and state_load tools for agent state",
+        "Read DATABASE_URL from environment",
+        "Fall back gracefully if database unavailable",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Completed - Added NotificationChannel, TelegramConfig, TradeApprovalRequest, ApprovalResponse types"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-003",
-      "title": "Create Paper Trading Session Manager",
-      "description": "As a user, I want to create and manage paper trading sessions so that I can test strategies without risking real money",
+      "id": "US-015",
+      "title": "Create Market Regime Detector Agent",
+      "description": "As a trader, I want automatic market regime detection so that strategies adapt to conditions",
       "acceptanceCriteria": [
-        "Create src/modes/paper-trading.ts file",
-        "Implement createPaperSession(strategyId, initialBalance) function returning PaperSession",
-        "Implement getPaperSession(sessionId) function",
-        "Implement listPaperSessions() function returning all sessions",
-        "Sessions persist to .sessions/paper/ directory as JSON files",
+        "Create src/agents/regime-detector.ts",
+        "Implement detectRegime(symbol) returning bull/bear/range/volatile",
+        "Use moving average slopes and volatility indicators",
+        "Add confidence score 0-1 for regime classification",
+        "Cache regime for 1 hour to avoid excessive recalculation",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Completed - Created paper-trading.ts with session CRUD, persistence to .sessions/paper/"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-004",
-      "title": "Implement Paper Trade Execution Logic",
-      "description": "As a user, I want paper trades to execute against simulated prices so that I can see realistic trade results",
+      "id": "US-016",
+      "title": "Create Performance Attribution System",
+      "description": "As a trader, I want to understand why strategies win or lose",
       "acceptanceCriteria": [
-        "Add executePaperTrade(sessionId, symbol, side, size, price) to paper-trading.ts",
-        "Trade creates a PaperTrade record and updates session balance",
-        "Add closePaperPosition(sessionId, symbol, exitPrice) function",
-        "Calculate PnL correctly for long and short positions",
-        "Update session's positions array on trade execution",
+        "Create src/analytics/attribution.ts",
+        "Implement attributeByRegime() grouping PnL by market regime",
+        "Implement attributeByTimeOfDay() grouping PnL by hour",
+        "Implement attributeBySymbol() grouping PnL by asset",
+        "Return ranked list of factors with contribution percentage",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Completed - executePaperTrade, closePaperPosition with PnL calculation"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-005",
-      "title": "Add Paper Trading CLI Commands",
-      "description": "As a user, I want CLI commands for paper trading so that I can start, monitor, and stop paper sessions from terminal",
+      "id": "US-017",
+      "title": "Create Confidence Calibration Tracker",
+      "description": "As a trader, I want to track prediction accuracy to calibrate confidence",
       "acceptanceCriteria": [
-        "Add 'donut paper start --strategy <name> --balance <amount>' command to index.ts",
-        "Add 'donut paper status [sessionId]' command showing session metrics",
-        "Add 'donut paper trades [sessionId]' command listing all trades",
-        "Add 'donut paper stop <sessionId>' command to end session",
-        "Commands use Ora spinners and Chalk formatting consistent with existing CLI",
+        "Create src/analytics/calibration.ts",
+        "Track predictions with confidence scores",
+        "Compare predictions to actual outcomes",
+        "Calculate calibration curve (predicted vs actual)",
+        "Report over/under confidence bias",
+        "Persist calibration data to .sessions/calibration.json",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Completed - paper start/status/trades/stop/list commands with Chalk/Ora formatting"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-006",
-      "title": "Create Telegram Client Module",
-      "description": "As a developer, I want a Telegram client so that the CLI can send notifications and receive approval responses",
+      "id": "US-018",
+      "title": "Create Trade Journal MCP Server",
+      "description": "As a trader, I want a trade journal so that I can review decision rationale",
       "acceptanceCriteria": [
-        "Create src/integrations/telegram-client.ts file",
-        "Implement sendMessage(chatId, message) function using Telegram Bot API",
-        "Implement sendTradeApproval(chatId, tradeApproval: TradeApprovalRequest) with inline keyboard buttons",
-        "Use fetch for HTTP calls to api.telegram.org",
-        "Read TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID from environment",
+        "Create src/mcp-servers/journal-server.ts",
+        "Implement journal_entry tool to log trade decisions with rationale",
+        "Implement journal_search tool to find entries by date/symbol/tag",
+        "Implement journal_summary tool to generate period summaries",
+        "Store entries in .sessions/journal/ as markdown files",
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Completed - sendMessage, sendTradeApproval with inline keyboard, validateCredentials"
-    },
-    {
-      "id": "US-007",
-      "title": "Implement Telegram Webhook Handler",
-      "description": "As a user, I want to approve or reject trades via Telegram replies so that I can manage trades remotely",
-      "acceptanceCriteria": [
-        "Add startWebhookServer(port) function to telegram-client.ts",
-        "Parse callback_query updates for APPROVE/REJECT button clicks",
-        "Store pending approvals in memory with UUID trade IDs",
-        "Implement waitForApproval(tradeId, timeoutMs) returning ApprovalResponse",
-        "Trade IDs are one-time use (expire after first response)",
-        "Typecheck passes"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "Completed - startWebhookServer, waitForApproval, requestApprovalAndWait with one-time UUID handling"
-    },
-    {
-      "id": "US-008",
-      "title": "Add Notification CLI Commands",
-      "description": "As a user, I want CLI commands to configure and test notifications so that I can set up Telegram alerts",
-      "acceptanceCriteria": [
-        "Add 'donut notify setup telegram --token <token> --chat <chatId>' command",
-        "Store config in ~/.donut/notifications.json",
-        "Add 'donut notify test' command sending test message to configured channels",
-        "Add 'donut notify status' showing configured channels",
-        "Commands validate Telegram credentials by sending test message",
-        "Typecheck passes"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "Completed - notify setup/test/status commands with ~/.donut/notifications.json persistence"
-    },
-    {
-      "id": "US-009",
-      "title": "Create Demo Mode Data Generator",
-      "description": "As a new user, I want demo mode with sample data so that I can learn the CLI without setting up backends",
-      "acceptanceCriteria": [
-        "Create src/modes/demo-mode.ts file",
-        "Implement generateDemoStrategy() returning a sample momentum strategy",
-        "Implement generateDemoBacktestResults() returning fake metrics (Sharpe, drawdown, etc.)",
-        "Implement generateDemoTrades() returning 10-20 sample trades",
-        "Demo data is realistic but clearly marked as '[DEMO]' in output",
-        "Typecheck passes"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "Completed - Full demo data generators with [DEMO] prefix, strategies, trades, equity curves"
-    },
-    {
-      "id": "US-010",
-      "title": "Add Demo Mode CLI Integration",
-      "description": "As a new user, I want 'donut demo' command so that I can try the CLI features immediately",
-      "acceptanceCriteria": [
-        "Add 'donut demo' command that runs interactive demo tour",
-        "Demo shows: strategy list, backtest run (fake), results analysis",
-        "Add '--demo' flag to 'donut start' to use demo backends",
-        "Demo mode skips backend health checks",
-        "Clear '[DEMO MODE]' indicator in all demo output",
-        "Typecheck passes"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Completed - demo tour/strategies/backtest/trades/runs commands with DEMO_BANNER and indicator"
-    },
-    {
-      "id": "US-011",
-      "title": "Integrate Paper Trading with Live Data Feed",
-      "description": "As a user, I want paper trading to use real market prices so that simulation is realistic",
-      "acceptanceCriteria": [
-        "Add getCurrentPrice(symbol) function to hummingbot-client.ts using candle endpoint",
-        "Paper trade execution fetches live price if no price provided",
-        "Add --live flag to 'donut paper start' to enable live price updates",
-        "Log price source (live vs manual) in trade records",
-        "Typecheck passes"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Completed - getCurrentPrice in HummingbotClient, --live flag, PriceSource tracking in trades, liveMode in sessions"
-    },
-    {
-      "id": "US-012",
-      "title": "Add Paper vs Backtest Comparison View",
-      "description": "As a user, I want to compare paper trading results with backtest predictions so that I can validate strategy performance",
-      "acceptanceCriteria": [
-        "Add 'donut paper compare <sessionId> <backtestRunId>' command",
-        "Display side-by-side table with: total PnL, win rate, max drawdown, Sharpe",
-        "Calculate delta percentage between paper and backtest metrics",
-        "Highlight significant deviations (>20% difference) in red",
-        "Typecheck passes"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Completed - calculatePaperMetrics, side-by-side table, delta calculation, >20% highlighting in red/green"
+      "passes": false,
+      "notes": ""
     }
   ]
 }

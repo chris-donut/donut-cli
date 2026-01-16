@@ -9,6 +9,8 @@
 - Use Zod schemas for type definitions with `z.infer<>` to derive TypeScript types
 - Follow existing section structure in types.ts with clear header comments
 - UUID validation uses `z.string().uuid()` from Zod
+- RiskManager: Use `getRiskManager()` singleton from `hooks/risk-hook.ts` for pre/post tool hooks
+- BaseAgent.processMessage() now takes `stage` parameter for risk context
 
 ## Iteration History
 
@@ -155,3 +157,16 @@
 
 ---
 
+
+### 2026-01-15 21:15 - US-013
+Thread: https://ampcode.com/threads/T-019bc49b-2767-7242-be85-4a5552f42d47
+- **What was implemented**: Wired RiskManager into BaseAgent tool execution
+- **Files changed**: src/agents/base-agent.ts
+- **Learnings for future iterations:**
+  - RiskManager.preToolUseHook() returns { allowed, reason?, warnings[] } - check `allowed` first
+  - Use a `blockedTools` Set to track blocked tools and prevent postToolUse for them
+  - processMessage() signature changed to accept `stage` parameter for ToolExecutionContext
+  - High-risk tools defined in types.ts: donut_execute_trade, donut_place_order, etc.
+  - Clear blockedTools at start of each run() to avoid stale state
+
+---
