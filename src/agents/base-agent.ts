@@ -12,8 +12,11 @@ import {
   AgentResult,
   TerminalConfig,
   getAllowedTools,
+  ToolExecutionContext,
+  isHighRiskTool,
 } from "../core/types.js";
 import { SessionManager } from "../core/session.js";
+import { getRiskManager } from "../hooks/risk-hook.js";
 import { createNofxMcpServer } from "../mcp-servers/nofx-server.js";
 import { createHummingbotMcpServer } from "../mcp-servers/hummingbot-server.js";
 
@@ -54,6 +57,7 @@ export abstract class BaseAgent {
   protected config: AgentConfig;
   protected sessionManager: SessionManager;
   protected sessionId?: string;
+  protected blockedTools: Set<string> = new Set();
 
   constructor(config: AgentConfig) {
     this.config = config;
@@ -167,10 +171,12 @@ export abstract class BaseAgent {
     let success = true;
     let errorMessage: string | undefined;
 
+    this.blockedTools.clear();
+
     try {
       // Process streaming messages from the agent
       for await (const message of query({ prompt, options }) as AsyncIterable<AgentMessage>) {
-        await this.processMessage(message);
+        await this.processMessage(message, stage);
 
         // Capture session ID from init message
         if (message.type === "system" && message.subtype === "init" && message.session_id) {
@@ -208,16 +214,64 @@ export abstract class BaseAgent {
   /**
    * Process a message from the agent stream
    * Override in subclasses to add custom handling
+   *
+   * For high-risk tools, performs pre-execution risk checks via RiskManager.
+   * Blocked trades are logged with the reason and marked in blockedTools set.
    */
-  protected async processMessage(message: AgentMessage): Promise<void> {
-    // Log tool usage for debugging
-    if (message.type === "tool_use") {
-      console.log(`  [${this.agentType}] Using tool: ${message.tool_name}`);
+  protected async processMessage(
+    message: AgentMessage,
+    stage: WorkflowStage
+  ): Promise<void> {
+    const riskManager = getRiskManager();
+
+    if (message.type === "tool_use" && message.tool_name) {
+      const toolName = message.tool_name;
+
+      if (isHighRiskTool(toolName)) {
+        const context: ToolExecutionContext = {
+          toolName,
+          params: (message.tool_input as Record<string, unknown>) ?? {},
+          agentType: this.agentType,
+          stage,
+          sessionId: this.sessionId ?? "unknown",
+        };
+
+        const riskResult = await riskManager.preToolUseHook(context);
+
+        if (riskResult.warnings.length > 0) {
+          for (const warning of riskResult.warnings) {
+            console.log(`  [RiskManager] ⚠️  ${warning}`);
+          }
+        }
+
+        if (!riskResult.allowed) {
+          console.log(
+            `  [RiskManager] 🚫 BLOCKED: ${toolName} - ${riskResult.reason}`
+          );
+          this.blockedTools.add(toolName);
+          return;
+        }
+      }
+
+      console.log(`  [${this.agentType}] Using tool: ${toolName}`);
     }
 
-    // Log text responses
+    if (message.type === "tool_result" && message.tool_name) {
+      const toolName = message.tool_name;
+
+      if (isHighRiskTool(toolName) && !this.blockedTools.has(toolName)) {
+        const context: ToolExecutionContext = {
+          toolName,
+          params: {},
+          agentType: this.agentType,
+          stage,
+          sessionId: this.sessionId ?? "unknown",
+        };
+        await riskManager.postToolUseHook(context, message.result);
+      }
+    }
+
     if (message.type === "text" && message.text) {
-      // Stream text to console (or could be piped elsewhere)
       process.stdout.write(message.text);
     }
   }
