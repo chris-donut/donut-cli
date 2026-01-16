@@ -1,0 +1,119 @@
+{
+  "project": "Donut CLI - Phase 4 Thesis Trading Layer",
+  "branchName": "ralph/thesis-trading-layer",
+  "description": "Thesis-driven trading infrastructure: formal thesis management, conviction tracking, invalidation alerts, and thesis performance analytics for conviction-based traders.",
+  "userStories": [
+    {
+      "id": "TH-001",
+      "title": "Create Thesis Schema and Types",
+      "description": "As a thesis trader, I want a formal data model for trading theses so that I can track my convictions systematically",
+      "acceptanceCriteria": [
+        "Create src/thesis/types.ts with TradingThesis interface",
+        "Include fields: id, title, timeframe (weeks/months/years), conviction (0-100)",
+        "Include keyAssumptions array of strings",
+        "Include invalidationSignals array of strings",
+        "Include targetAllocation percentage (0-100)",
+        "Include status enum: draft, active, invalidated, closed",
+        "Include linkedPositions array of position IDs",
+        "Add Zod schemas for runtime validation",
+        "Export ThesisStatus enum and all types",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "TH-002",
+      "title": "Create Thesis MCP Server",
+      "description": "As a thesis trader, I want MCP tools to manage my theses so that AI agents can help track them",
+      "acceptanceCriteria": [
+        "Create src/mcp-servers/thesis-server.ts",
+        "Implement thesis_create tool to create new thesis",
+        "Implement thesis_update tool to modify thesis fields",
+        "Implement thesis_list tool to list all theses by status",
+        "Implement thesis_get tool to retrieve thesis details",
+        "Implement thesis_link_position tool to associate positions with thesis",
+        "Store theses in .sessions/theses/ as JSON files",
+        "Export createThesisMcpServer factory function",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "TH-003",
+      "title": "Create Thesis Analyst Agent",
+      "description": "As a thesis trader, I want an AI agent that monitors if my thesis still holds",
+      "acceptanceCriteria": [
+        "Create src/agents/thesis-analyst.ts extending BaseAgent",
+        "Implement analyzeThesis(thesisId) method",
+        "Check each keyAssumption against current market data",
+        "Check invalidationSignals against recent events",
+        "Return ThesisHealth object with assumptionStatuses and overallHealth score",
+        "Include recommendations (hold, reduce, close, increase)",
+        "Add agent to orchestrator's available specialists",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "TH-004",
+      "title": "Implement Invalidation Alert System",
+      "description": "As a thesis trader, I want alerts when my thesis assumptions break",
+      "acceptanceCriteria": [
+        "Create src/thesis/invalidation-monitor.ts",
+        "Define InvalidationAlert type with thesisId, signal, severity, timestamp",
+        "Implement checkInvalidationSignals(thesis) function",
+        "Support price-based signals (symbol breaks $X level)",
+        "Support time-based signals (thesis older than timeframe)",
+        "Support conviction-based signals (conviction dropped below threshold)",
+        "Return array of triggered InvalidationAlerts",
+        "Integrate with thesis_check MCP tool",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "TH-005",
+      "title": "Create Conviction Tracker",
+      "description": "As a thesis trader, I want to track how my conviction evolves over time",
+      "acceptanceCriteria": [
+        "Create src/thesis/conviction-tracker.ts",
+        "Define ConvictionChange type with thesisId, oldConviction, newConviction, reason, timestamp",
+        "Implement recordConvictionChange(thesisId, newConviction, reason) function",
+        "Implement getConvictionHistory(thesisId) returning chronological changes",
+        "Implement detectMismatch(thesis) comparing conviction to position sizing",
+        "Add mismatchScore: high conviction + small position = underexposed",
+        "Persist conviction history to .sessions/conviction-history.json",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "TH-006",
+      "title": "Create Thesis Performance Analytics",
+      "description": "As a thesis trader, I want to analyze which theses performed best historically",
+      "acceptanceCriteria": [
+        "Create src/analytics/thesis-performance.ts",
+        "Define ThesisPerformance type with thesisId, totalPnl, roiPercent, duration, wasCorrect",
+        "Implement calculateThesisPerformance(thesis) aggregating linked position PnL",
+        "Implement rankThesesByPerformance() returning sorted list",
+        "Implement analyzeThesisOutcomes() returning accuracy rate by timeframe",
+        "Calculate conviction calibration: was high conviction = high returns?",
+        "Export formatThesisPerformanceReport() for readable output",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

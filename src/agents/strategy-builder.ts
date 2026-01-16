@@ -7,8 +7,6 @@
 
 import { BaseAgent, AgentConfig } from "./base-agent.js";
 import { AgentType, WorkflowStage, AgentResult } from "../core/types.js";
-import { BACKTEST_READ_TOOLS } from "../mcp-servers/nofx-server.js";
-import { HB_READ_TOOLS } from "../mcp-servers/hummingbot-server.js";
 
 const STRATEGY_BUILDER_PROMPT = `You are a trading strategy builder assistant for the Donut trading terminal. Your role is to help users design effective trading strategies for cryptocurrency perpetual futures.
 
@@ -44,6 +42,9 @@ Be conversational but focused. Ask clarifying questions when requirements are am
 
 /**
  * Strategy Builder Agent - Creates and modifies trading strategies
+ *
+ * Uses dependency injection for MCP servers and tools.
+ * The default tools are provided by the McpServerProvider based on backend type.
  */
 export class StrategyBuilderAgent extends BaseAgent {
   get agentType(): AgentType {
@@ -54,38 +55,8 @@ export class StrategyBuilderAgent extends BaseAgent {
     return STRATEGY_BUILDER_PROMPT;
   }
 
-  get defaultTools(): string[] {
-    const backend = this.getBackendType();
-
-    // Base strategy tools (these work in offline mode too)
-    const strategyTools = [
-      "strategy_list",
-      "strategy_get",
-      "strategy_create",
-      "strategy_validate",
-      "strategy_preview_prompt",
-      "strategy_update",
-    ];
-
-    // Add read-only backtest tools based on backend
-    if (backend === "hummingbot") {
-      return [
-        ...strategyTools,
-        // Hummingbot strategy tools
-        "hb_strategy_list",
-        "hb_strategy_get",
-        "hb_strategy_create",
-        // Read-only tools for context
-        ...HB_READ_TOOLS,
-      ];
-    }
-
-    return [
-      ...strategyTools,
-      // Read-only nofx backtest tools for context
-      ...BACKTEST_READ_TOOLS,
-    ];
-  }
+  // Note: defaultTools is inherited from BaseAgent and uses McpServerProvider
+  // No need to override unless we want custom tool selection
 
   /**
    * Build a new strategy based on user requirements

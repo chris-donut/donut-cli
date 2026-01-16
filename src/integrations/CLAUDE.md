@@ -7,6 +7,8 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1140 | 8:35 PM | 🔵 | Donut CLI Type System and Hook Integration Architecture Analysis | ~1664 |
+| #1136 | 8:33 PM | 🔵 | HummingbotClient: HTTP Wrapper for Hummingbot Dashboard REST API | ~1031 |
 | #987 | 5:56 PM | 🟣 | Hummingbot Integration Files Created in Project Structure | ~541 |
 | #964 | 5:33 PM | 🔵 | Comprehensive Hummingbot Dashboard Analysis Completed via Explore Agent | ~803 |
 | #948 | 1:09 PM | 🔵 | NofxClient Data Transformation and API Patterns | ~583 |

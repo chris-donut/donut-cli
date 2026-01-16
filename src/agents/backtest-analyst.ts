@@ -7,8 +7,6 @@
 
 import { BaseAgent, AgentConfig } from "./base-agent.js";
 import { AgentType, WorkflowStage, BacktestConfig, AgentResult } from "../core/types.js";
-import { BACKTEST_TOOLS } from "../mcp-servers/nofx-server.js";
-import { HB_BACKTEST_TOOLS } from "../mcp-servers/hummingbot-server.js";
 
 const BACKTEST_ANALYST_PROMPT = `You are a backtest analyst for the Donut trading terminal. Your role is to run backtests and provide insightful analysis of trading strategy performance.
 
@@ -45,6 +43,9 @@ Be thorough but concise. Focus on insights that lead to better strategies.`;
 
 /**
  * Backtest Analyst Agent - Runs and analyzes backtests
+ *
+ * Uses dependency injection for MCP servers and tools.
+ * The default tools are provided by the McpServerProvider based on backend type.
  */
 export class BacktestAnalystAgent extends BaseAgent {
   get agentType(): AgentType {
@@ -55,14 +56,8 @@ export class BacktestAnalystAgent extends BaseAgent {
     return BACKTEST_ANALYST_PROMPT;
   }
 
-  get defaultTools(): string[] {
-    // Use Hummingbot tools if configured, otherwise nofx tools
-    const backend = this.getBackendType();
-    if (backend === "hummingbot") {
-      return [...HB_BACKTEST_TOOLS];
-    }
-    return [...BACKTEST_TOOLS];
-  }
+  // Note: defaultTools is inherited from BaseAgent and uses McpServerProvider
+  // No need to override unless we want custom tool selection
 
   /**
    * Start a new backtest run

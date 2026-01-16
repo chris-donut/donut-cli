@@ -1,8 +1,9 @@
 /**
- * Base Agent Class - Core agent functionality with session management
+ * Base Agent Class - Core agent functionality with dependency injection
  *
- * This implements the multi-stage workflow pattern from primodium/trading-agent
- * with session continuity via the `resume` parameter.
+ * This implements the multi-stage workflow pattern with session continuity
+ * via the `resume` parameter. Uses dependency injection for testability
+ * and flexibility.
  */
 
 import { query, Options } from "@anthropic-ai/claude-agent-sdk";
@@ -15,21 +16,44 @@ import {
   ToolExecutionContext,
   isHighRiskTool,
 } from "../core/types.js";
+import {
+  AgentDependencies,
+  Logger,
+  RiskManager,
+  McpServerProvider,
+  SessionProvider,
+  McpServerConfig,
+  ConsoleLogger,
+} from "../core/dependencies.js";
+import {
+  createDefaultDependencies,
+  DefaultMcpServerProvider,
+  RiskManagerAdapter,
+  SessionManagerAdapter,
+} from "../core/providers.js";
 import { SessionManager } from "../core/session.js";
-import { getRiskManager } from "../hooks/risk-hook.js";
-import { createNofxMcpServer } from "../mcp-servers/nofx-server.js";
-import { createHummingbotMcpServer } from "../mcp-servers/hummingbot-server.js";
 
+// ============================================================================
+// Agent Configuration
+// ============================================================================
+
+/**
+ * Configuration for agent creation
+ * Supports both legacy (direct config) and new (dependency injection) styles
+ */
 export interface AgentConfig {
   terminalConfig: TerminalConfig;
   sessionManager: SessionManager;
+
+  /**
+   * Optional dependency overrides for testing or custom implementations
+   */
+  dependencies?: Partial<AgentDependencies>;
 }
 
-export interface McpServerConfig {
-  type: "sdk";
-  name: string;
-  instance: ReturnType<typeof createNofxMcpServer>;
-}
+// ============================================================================
+// Message Types
+// ============================================================================
 
 /**
  * Message types from Claude Agent SDK query
@@ -44,25 +68,64 @@ interface AgentMessage {
   text?: string;
 }
 
+// ============================================================================
+// Base Agent
+// ============================================================================
+
 /**
  * Base class for all trading terminal agents
  *
  * Provides:
  * - Session management with resume capability
- * - MCP server integration
+ * - MCP server integration via injected provider
  * - Tool filtering by workflow stage
  * - Streaming message processing
+ * - Risk management hooks
+ *
+ * Dependencies are injected for testability and flexibility.
  */
 export abstract class BaseAgent {
-  protected config: AgentConfig;
-  protected sessionManager: SessionManager;
+  protected readonly config: AgentConfig;
+  protected readonly riskManager: RiskManager;
+  protected readonly mcpProvider: McpServerProvider;
+  protected readonly sessionProvider: SessionProvider;
+
+  private readonly _baseLogger: Logger;
+  private _logger?: Logger;
+
   protected sessionId?: string;
   protected blockedTools: Set<string> = new Set();
 
   constructor(config: AgentConfig) {
     this.config = config;
-    this.sessionManager = config.sessionManager;
+
+    // Create default dependencies if not provided
+    const deps = createDefaultDependencies(
+      config.terminalConfig,
+      config.sessionManager,
+      config.dependencies
+    );
+
+    // Store base logger - child logger created lazily to access agentType
+    this._baseLogger = deps.logger;
+    this.riskManager = deps.riskManager;
+    this.mcpProvider = deps.mcpProvider;
+    this.sessionProvider = deps.sessionProvider;
   }
+
+  /**
+   * Get logger with agent context (lazy initialization)
+   */
+  protected get logger(): Logger {
+    if (!this._logger) {
+      this._logger = this._baseLogger.child({ agent: this.agentType });
+    }
+    return this._logger;
+  }
+
+  // ============================================================================
+  // Abstract Properties (implemented by subclasses)
+  // ============================================================================
 
   /**
    * The type of this agent (for identification and logging)
@@ -76,8 +139,15 @@ export abstract class BaseAgent {
 
   /**
    * Default tools this agent can use (may be filtered by stage)
+   * Can be overridden in subclasses or use provider's defaults
    */
-  abstract get defaultTools(): string[];
+  get defaultTools(): string[] {
+    return this.mcpProvider.getDefaultTools(this.agentType);
+  }
+
+  // ============================================================================
+  // Protected Helpers
+  // ============================================================================
 
   /**
    * Build the options object for the Claude Agent SDK query
@@ -98,7 +168,7 @@ export abstract class BaseAgent {
     ];
 
     const options: Options = {
-      mcpServers: this.getMcpServers(),
+      mcpServers: this.mcpProvider.getMcpServers() as Record<string, McpServerConfig>,
       allowedTools: allTools,
       maxTurns: this.config.terminalConfig.maxTurns,
       systemPrompt: this.systemPrompt,
@@ -113,55 +183,22 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Get MCP server configurations
-   * Supports multiple backends: Hummingbot (preferred) or nofx (fallback)
-   * Override in subclasses to add more servers
-   */
-  protected getMcpServers(): Record<string, McpServerConfig> {
-    const { terminalConfig } = this.config;
-    const servers: Record<string, McpServerConfig> = {};
-
-    // Prefer Hummingbot if configured
-    if (terminalConfig.hummingbotUrl) {
-      servers["hummingbot"] = {
-        type: "sdk",
-        name: "hummingbot",
-        instance: createHummingbotMcpServer({
-          baseUrl: terminalConfig.hummingbotUrl,
-        }),
-      };
-    }
-    // Fall back to nofx if configured
-    else if (terminalConfig.nofxApiUrl) {
-      servers["nofx-backtest"] = {
-        type: "sdk",
-        name: "nofx-backtest",
-        instance: createNofxMcpServer({
-          baseUrl: terminalConfig.nofxApiUrl,
-          authToken: terminalConfig.nofxAuthToken,
-        }),
-      };
-    }
-
-    return servers;
-  }
-
-  /**
-   * Check which backend is configured
+   * Get the backend type from the MCP provider
    */
   protected getBackendType(): "hummingbot" | "nofx" | "none" {
-    const { terminalConfig } = this.config;
-    if (terminalConfig.hummingbotUrl) return "hummingbot";
-    if (terminalConfig.nofxApiUrl) return "nofx";
-    return "none";
+    return this.mcpProvider.getBackendType();
   }
+
+  // ============================================================================
+  // Public API
+  // ============================================================================
 
   /**
    * Run the agent with a prompt in a specific workflow stage
    */
   async run(prompt: string, stage: WorkflowStage): Promise<AgentResult> {
     // Check for existing session to resume
-    const existingSessionId = this.sessionManager.getAgentSession(this.agentType);
+    const existingSessionId = this.sessionProvider.getAgentSession(this.agentType);
     if (existingSessionId) {
       this.sessionId = existingSessionId;
     }
@@ -181,7 +218,7 @@ export abstract class BaseAgent {
         // Capture session ID from init message
         if (message.type === "system" && message.subtype === "init" && message.session_id) {
           this.sessionId = message.session_id;
-          await this.sessionManager.updateAgentSession(this.agentType, this.sessionId);
+          await this.sessionProvider.updateAgentSession(this.agentType, this.sessionId);
         }
 
         // Capture final result
@@ -198,6 +235,11 @@ export abstract class BaseAgent {
     } catch (error) {
       success = false;
       errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error("Agent run failed", {
+        error: errorMessage,
+        stage,
+        prompt: prompt.slice(0, 100),
+      });
     }
 
     return {
@@ -222,57 +264,73 @@ export abstract class BaseAgent {
     message: AgentMessage,
     stage: WorkflowStage
   ): Promise<void> {
-    const riskManager = getRiskManager();
-
     if (message.type === "tool_use" && message.tool_name) {
-      const toolName = message.tool_name;
-
-      if (isHighRiskTool(toolName)) {
-        const context: ToolExecutionContext = {
-          toolName,
-          params: (message.tool_input as Record<string, unknown>) ?? {},
-          agentType: this.agentType,
-          stage,
-          sessionId: this.sessionId ?? "unknown",
-        };
-
-        const riskResult = await riskManager.preToolUseHook(context);
-
-        if (riskResult.warnings.length > 0) {
-          for (const warning of riskResult.warnings) {
-            console.log(`  [RiskManager] ⚠️  ${warning}`);
-          }
-        }
-
-        if (!riskResult.allowed) {
-          console.log(
-            `  [RiskManager] 🚫 BLOCKED: ${toolName} - ${riskResult.reason}`
-          );
-          this.blockedTools.add(toolName);
-          return;
-        }
-      }
-
-      console.log(`  [${this.agentType}] Using tool: ${toolName}`);
+      await this.handleToolUse(message, stage);
     }
 
     if (message.type === "tool_result" && message.tool_name) {
-      const toolName = message.tool_name;
-
-      if (isHighRiskTool(toolName) && !this.blockedTools.has(toolName)) {
-        const context: ToolExecutionContext = {
-          toolName,
-          params: {},
-          agentType: this.agentType,
-          stage,
-          sessionId: this.sessionId ?? "unknown",
-        };
-        await riskManager.postToolUseHook(context, message.result);
-      }
+      await this.handleToolResult(message, stage);
     }
 
     if (message.type === "text" && message.text) {
-      process.stdout.write(message.text);
+      this.logger.write(message.text);
+    }
+  }
+
+  /**
+   * Handle tool use messages with risk checking
+   */
+  private async handleToolUse(
+    message: AgentMessage,
+    stage: WorkflowStage
+  ): Promise<void> {
+    const toolName = message.tool_name!;
+
+    if (isHighRiskTool(toolName)) {
+      const context: ToolExecutionContext = {
+        toolName,
+        params: (message.tool_input as Record<string, unknown>) ?? {},
+        agentType: this.agentType,
+        stage,
+        sessionId: this.sessionId ?? "unknown",
+      };
+
+      const riskResult = await this.riskManager.preToolUseHook(context);
+
+      if (riskResult.warnings.length > 0) {
+        for (const warning of riskResult.warnings) {
+          this.logger.warn(`Risk warning: ${warning}`, { tool: toolName });
+        }
+      }
+
+      if (!riskResult.allowed) {
+        this.logger.warn(`Tool blocked: ${toolName}`, { reason: riskResult.reason });
+        this.blockedTools.add(toolName);
+        return;
+      }
+    }
+
+    this.logger.info(`Using tool: ${toolName}`, { agent: this.agentType });
+  }
+
+  /**
+   * Handle tool result messages with post-execution tracking
+   */
+  private async handleToolResult(
+    message: AgentMessage,
+    stage: WorkflowStage
+  ): Promise<void> {
+    const toolName = message.tool_name!;
+
+    if (isHighRiskTool(toolName) && !this.blockedTools.has(toolName)) {
+      const context: ToolExecutionContext = {
+        toolName,
+        params: {},
+        agentType: this.agentType,
+        stage,
+        sessionId: this.sessionId ?? "unknown",
+      };
+      await this.riskManager.postToolUseHook(context, message.result);
     }
   }
 
@@ -291,6 +349,10 @@ export abstract class BaseAgent {
   }
 }
 
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
 /**
  * Helper to create a formatted agent result for errors
  */
@@ -308,3 +370,8 @@ export function createErrorResult(
     error,
   };
 }
+
+/**
+ * Re-export McpServerConfig for backward compatibility
+ */
+export type { McpServerConfig } from "../core/dependencies.js";

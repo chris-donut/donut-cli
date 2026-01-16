@@ -1,0 +1,201 @@
+# Ralph Progress Log - Donut CLI MVP
+
+## Project Context
+- TypeScript CLI using Claude Agent SDK
+- Two existing backends: nofx (Go backtest engine), Hummingbot Dashboard
+- Target: Paper trading + Telegram notifications + Demo mode
+
+## Codebase Patterns
+- Use Zod schemas for type definitions with `z.infer<>` to derive TypeScript types
+- Follow existing section structure in types.ts with clear header comments
+- UUID validation uses `z.string().uuid()` from Zod
+- RiskManager: Use `getRiskManager()` singleton from `hooks/risk-hook.ts` for pre/post tool hooks
+- BaseAgent.processMessage() now takes `stage` parameter for risk context
+
+## Iteration History
+
+### 2026-01-15 19:25 - US-001
+- **What was implemented**: Paper trading type definitions
+- **Files changed**: src/core/types.ts
+- **Learnings for future iterations:**
+  - Types follow pattern: Schema first, then `export type X = z.infer<typeof XSchema>`
+  - Existing SideSchema can be reused for paper trading sides
+  - New type sections go between existing sections with clear comment headers
+
+---
+
+### 2026-01-15 19:28 - US-002
+- **What was implemented**: Notification type definitions for Telegram, Discord, webhook
+- **Files changed**: src/core/types.ts
+- **Learnings for future iterations:**
+  - Use `z.union()` for channel-specific settings that vary by type
+  - TradeApprovalRequest includes both createdAt and expiresAt for timeout handling
+  - Discord uses webhookUrl pattern while Telegram uses bot token + chat ID
+
+---
+
+### 2026-01-15 19:32 - US-003
+- **What was implemented**: Paper trading session manager with full CRUD
+- **Files changed**: src/modes/paper-trading.ts (new file)
+- **Learnings for future iterations:**
+  - Created new `modes` directory for operational modes (paper, demo, etc.)
+  - Used `randomUUID()` from Node's crypto module for session IDs
+  - Sessions stored in `.sessions/paper/` with `{sessionId}.json` naming
+  - Zod validation on read/write ensures type safety at boundaries
+
+---
+
+### 2026-01-15 19:36 - US-004
+- **What was implemented**: Paper trade execution with PnL calculations
+- **Files changed**: src/modes/paper-trading.ts
+- **Learnings for future iterations:**
+  - PnL for long: (exit - entry) * size; short: (entry - exit) * size
+  - Position averaging: newAvgPrice = (oldPrice*oldSize + newPrice*newSize) / totalSize
+  - Balance management: deduct on open, return principal + pnl on close
+  - ExecuteTradeResult pattern provides structured success/error responses
+
+---
+
+### 2026-01-15 19:42 - US-005
+- **What was implemented**: Paper trading CLI commands (start, status, trades, stop, list)
+- **Files changed**: src/index.ts
+- **Learnings for future iterations:**
+  - Commander.js: use `program.command("parent").command("child")` for subcommands
+  - Partial ID matching with `s.id.startsWith(sessionId)` for user convenience
+  - Chalk color pattern: green for profits/running, red for losses, yellow for paused/warning
+  - Always show helpful next-step commands after operations
+
+---
+
+### 2026-01-15 19:47 - US-006
+- **What was implemented**: Telegram Bot API client for notifications
+- **Files changed**: src/integrations/telegram-client.ts (new file)
+- **Learnings for future iterations:**
+  - Telegram Bot API uses `https://api.telegram.org/bot{TOKEN}/{method}`
+  - Inline keyboards use `reply_markup.inline_keyboard` with callback_data
+  - callback_data format: `action:tradeId` for easy parsing in webhook
+  - HTML parse_mode allows <b>, <i>, <code> tags for formatting
+
+---
+
+### 2026-01-15 19:55 - US-007
+- **What was implemented**: Telegram webhook server for receiving approval callbacks
+- **Files changed**: src/integrations/telegram-client.ts
+- **Learnings for future iterations:**
+  - Node http module: `createServer()` with `req.on('data')` and `req.on('end')` for body parsing
+  - Telegram sends `callback_query` updates for inline button clicks
+  - Must call `answerCallbackQuery` to remove loading state from button
+  - Promise-based waiting: store resolve function in Map, call when callback arrives
+  - One-time use pattern: set `used: boolean` flag before resolving to prevent double-processing
+  - Cleanup intervals: use `setInterval` to periodically expire stale pending items
+
+---
+
+### 2026-01-15 20:05 - US-008
+- **What was implemented**: Notification CLI commands (setup, test, status)
+- **Files changed**: src/index.ts
+- **Learnings for future iterations:**
+  - Config storage: Use `~/.donut/` directory pattern for user-level config
+  - `fs.mkdir(dir, { recursive: true })` ensures directory exists before writing
+  - Commander.js: `.argument("<channel>")` for positional args vs `.option()` for flags
+  - Credential validation: Always test credentials during setup (send test message)
+  - Multi-channel pattern: Store each channel config as optional property in JSON
+  - Security: Only show partial tokens/secrets in status output (`.slice(0, 10) + "..."`)
+
+---
+
+### 2026-01-15 20:15 - US-009
+- **What was implemented**: Demo mode data generators for onboarding
+- **Files changed**: src/modes/demo-mode.ts (new file)
+- **Learnings for future iterations:**
+  - Use `[DEMO]` prefix in all demo data names for clear identification
+  - Realistic data generation: Add slight randomization with biases (55% win rate, long bias)
+  - Base prices: Store realistic prices for each symbol to generate variations
+  - Seed-based variants: Use `seed` parameter to generate deterministic variations
+  - Trade pairs: Generate entry + exit trades together to maintain consistency
+  - Equity curves: Small random drift with upward bias simulates realistic returns
+
+---
+
+### 2026-01-15 20:25 - US-010
+- **What was implemented**: Demo mode CLI integration with interactive tour
+- **Files changed**: src/index.ts
+- **Learnings for future iterations:**
+  - Commander.js: `{ isDefault: true }` makes subcommand run when parent called with no args
+  - DEMO_BANNER pattern: Separate banner with visual [DEMO MODE] badge for clarity
+  - Tour pattern: Use `sleep()` delays between sections for dramatic effect
+  - Subcommand organization: demo tour/strategies/backtest/trades/runs mirrors real commands
+  - --demo flag: Early return pattern skips backend checks entirely
+  - Guidance: Always show next-step commands after completing demo operations
+
+---
+
+### 2026-01-15 20:45 - US-011
+- **What was implemented**: Paper trading integration with live data feed from Hummingbot
+- **Files changed**: src/modes/paper-trading.ts, src/index.ts, src/core/types.ts, src/integrations/hummingbot-client.ts
+- **Learnings for future iterations:**
+  - PriceSource enum (`"live" | "manual"`) tracks origin of trade prices for audit
+  - Optional parameters pattern: `price?: number` with fallback to live fetch when undefined
+  - HummingbotClient injection: Pass client instance to functions needing live data
+  - Session liveMode flag: Store mode preference on session for persistence
+  - Health check on startup: Verify backend connection before enabling live features
+  - Trade output indicators: `[L]` for live, `[M]` for manual makes source visible at a glance
+
+---
+
+### 2026-01-15 21:00 - US-012
+- **What was implemented**: Paper vs Backtest comparison view with side-by-side metrics table
+- **Files changed**: src/modes/paper-trading.ts, src/index.ts
+- **Learnings for future iterations:**
+  - PaperTradingMetrics interface mirrors BacktestMetrics for easy comparison
+  - Delta calculation: `((paper - backtest) / Math.abs(backtest)) * 100` for percentage diff
+  - Inverse metrics (drawdown, loss): Use `inverse: boolean` parameter to flip color logic
+  - Sharpe ratio from trades: Use per-trade returns as proxy, annualized with sqrt(252)
+  - Max drawdown tracking: Peak equity and running equity calculation on trade-by-trade basis
+  - Table formatting: Use `.padStart()` and `.padEnd()` for aligned columns in CLI
+  - Legend pattern: Add explanation of color coding at bottom of comparison table
+
+---
+
+
+### 2026-01-15 21:15 - US-013
+Thread: https://ampcode.com/threads/T-019bc49b-2767-7242-be85-4a5552f42d47
+- **What was implemented**: Wired RiskManager into BaseAgent tool execution
+- **Files changed**: src/agents/base-agent.ts
+- **Learnings for future iterations:**
+  - RiskManager.preToolUseHook() returns { allowed, reason?, warnings[] } - check `allowed` first
+  - Use a `blockedTools` Set to track blocked tools and prevent postToolUse for them
+  - processMessage() signature changed to accept `stage` parameter for ToolExecutionContext
+  - High-risk tools defined in types.ts: donut_execute_trade, donut_place_order, etc.
+  - Clear blockedTools at start of each run() to avoid stale state
+  - MCP Server Pattern: Use global pool/client with init function, graceful fallback when unavailable
+
+---
+
+### 2026-01-15 21:30 - US-014
+Thread: https://ampcode.com/threads/T-019bc49f-1010-7729-909c-d8d33dfd81ae
+- **What was implemented**: PostgreSQL MCP Server for decision persistence
+- **Files changed**: src/mcp-servers/postgres-server.ts (new), package.json
+- **Learnings for future iterations:**
+  - pg Pool with connection string from DATABASE_URL env var
+  - Graceful fallback: check `isAvailable` flag before queries, return error JSON instead of throwing
+  - Use `ON CONFLICT ... DO UPDATE` for upsert pattern in state_save
+  - Table creation with `IF NOT EXISTS` in ensureTables() called during init
+  - Tool return pattern: always return `{ success, ... }` for consistent handling
+
+---
+
+### 2026-01-15 21:45 - US-015
+Thread: https://ampcode.com/threads/T-019bc4a1-9be7-74f9-a2ab-cec5e77b8f30
+- **What was implemented**: Market Regime Detector with bull/bear/range/volatile classification
+- **Files changed**: src/agents/regime-detector.ts (new)
+- **Learnings for future iterations:**
+  - RegimeDetector is a standalone class, not extending BaseAgent (pure analytical tool)
+  - Uses dependency injection for price data: `priceDataProvider: (symbol, bars) => Promise<PriceBar[]>`
+  - Technical indicators: EMA calculated with SMA seed, ATR as EMA of True Range
+  - Slope normalization: divide by avg value to get percentage slope for cross-asset comparability
+  - Cache pattern: Map<symbol, { result, expiresAt }> with 1hr TTL
+  - Confidence scoring: weighted by score margin between top-2 regime candidates
+  - Mock provider available via `createMockRegimeDetector()` for testing
+
+---
