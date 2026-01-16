@@ -25,6 +25,7 @@ import {
   listPaperSessions,
   stopPaperSession,
 } from "./modes/paper-trading.js";
+import { HummingbotClient } from "./integrations/hummingbot-client.js";
 import {
   TelegramClientConfig,
   validateCredentials,
@@ -485,6 +486,7 @@ paper
   .description("Start a new paper trading session")
   .requiredOption("-s, --strategy <name>", "Strategy name or ID")
   .option("-b, --balance <amount>", "Initial balance in USD", "10000")
+  .option("-l, --live", "Enable live price updates from Hummingbot")
   .action(async (options) => {
     const spinner = ora("Creating paper trading session...").start();
 
@@ -494,7 +496,31 @@ paper
         throw new Error("Invalid balance amount");
       }
 
-      const session = await createPaperSession(options.strategy, initialBalance);
+      const liveMode = options.live === true;
+
+      // If live mode is enabled, verify Hummingbot is configured
+      if (liveMode) {
+        const config = loadConfig();
+        if (!config.hummingbotUrl) {
+          spinner.fail(chalk.red("Live mode requires Hummingbot Dashboard"));
+          console.log(chalk.gray("\nSet HUMMINGBOT_URL in your .env file to enable live prices."));
+          console.log(chalk.gray("Example: HUMMINGBOT_URL=http://localhost:8000"));
+          process.exit(1);
+        }
+
+        // Test connection to Hummingbot
+        spinner.text = "Verifying Hummingbot connection...";
+        const client = new HummingbotClient({ baseUrl: config.hummingbotUrl });
+        const healthy = await client.healthCheck();
+        if (!healthy) {
+          spinner.fail(chalk.red("Cannot connect to Hummingbot Dashboard"));
+          console.log(chalk.gray(`\nMake sure Hummingbot Dashboard is running at ${config.hummingbotUrl}`));
+          process.exit(1);
+        }
+        spinner.text = "Creating paper trading session...";
+      }
+
+      const session = await createPaperSession(options.strategy, initialBalance, liveMode);
 
       spinner.succeed(`Paper trading session created`);
       console.log(chalk.gray("─".repeat(50)));
@@ -502,6 +528,7 @@ paper
       console.log(`Strategy:     ${chalk.yellow(session.strategyId)}`);
       console.log(`Balance:      ${chalk.green("$" + session.balance.toLocaleString())}`);
       console.log(`Status:       ${chalk.green(session.status)}`);
+      console.log(`Price Mode:   ${liveMode ? chalk.cyan("LIVE (from Hummingbot)") : chalk.gray("Manual")}`);
       console.log(chalk.gray("─".repeat(50)));
       console.log(chalk.gray("\nUse these commands to manage your session:"));
       console.log(`  ${chalk.cyan("donut paper status")} ${session.id.slice(0, 8)}...`);
@@ -553,6 +580,7 @@ paper
       console.log(`Session ID:     ${chalk.cyan(session.id)}`);
       console.log(`Strategy:       ${chalk.yellow(session.strategyId)}`);
       console.log(`Status:         ${session.status === "running" ? chalk.green(session.status) : chalk.yellow(session.status)}`);
+      console.log(`Price Mode:     ${session.liveMode ? chalk.cyan("LIVE") : chalk.gray("Manual")}`);
       console.log(`Initial:        ${chalk.gray("$" + session.initialBalance.toLocaleString())}`);
       console.log(`Current:        ${chalk.bold("$" + session.balance.toLocaleString())}`);
       console.log(`Return:         ${returnPct >= 0 ? chalk.green(returnPct.toFixed(2) + "%") : chalk.red(returnPct.toFixed(2) + "%")}`);
@@ -624,11 +652,12 @@ paper
         const pnlStr = trade.pnl !== undefined
           ? (trade.pnl >= 0 ? chalk.green(`+$${trade.pnl.toFixed(2)}`) : chalk.red(`-$${Math.abs(trade.pnl).toFixed(2)}`))
           : chalk.gray("open");
+        const sourceStr = trade.priceSource === "live" ? chalk.cyan("[L]") : chalk.gray("[M]");
 
         console.log(
           `${chalk.gray(date)} ${sideStr} ${chalk.white(trade.symbol.padEnd(10))} ` +
           `${chalk.gray("qty:")} ${trade.size.toFixed(4).padStart(10)} ` +
-          `${chalk.gray("@")} $${trade.entryPrice.toFixed(2).padStart(10)} ` +
+          `${chalk.gray("@")} $${trade.entryPrice.toFixed(2).padStart(10)} ${sourceStr} ` +
           `${chalk.gray("PnL:")} ${pnlStr}`
         );
       }

@@ -269,6 +269,9 @@ export const PaperPositionSchema = z.object({
 
 export type PaperPosition = z.infer<typeof PaperPositionSchema>;
 
+export const PriceSourceSchema = z.enum(["manual", "live"]);
+export type PriceSource = z.infer<typeof PriceSourceSchema>;
+
 export const PaperTradeSchema = z.object({
   id: z.string().uuid(),
   symbol: z.string(),
@@ -279,6 +282,7 @@ export const PaperTradeSchema = z.object({
   pnl: z.number().optional(),
   timestamp: z.number(),
   closedAt: z.number().optional(),
+  priceSource: PriceSourceSchema.optional(),
 });
 
 export type PaperTrade = z.infer<typeof PaperTradeSchema>;
@@ -293,6 +297,7 @@ export const PaperSessionSchema = z.object({
   startedAt: z.number(),
   stoppedAt: z.number().optional(),
   status: PaperSessionStatusSchema,
+  liveMode: z.boolean().optional(),
 });
 
 export type PaperSession = z.infer<typeof PaperSessionSchema>;

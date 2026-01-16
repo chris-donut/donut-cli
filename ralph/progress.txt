@@ -128,3 +128,16 @@
 
 ---
 
+### 2026-01-15 20:45 - US-011
+- **What was implemented**: Paper trading integration with live data feed from Hummingbot
+- **Files changed**: src/modes/paper-trading.ts, src/index.ts, src/core/types.ts, src/integrations/hummingbot-client.ts
+- **Learnings for future iterations:**
+  - PriceSource enum (`"live" | "manual"`) tracks origin of trade prices for audit
+  - Optional parameters pattern: `price?: number` with fallback to live fetch when undefined
+  - HummingbotClient injection: Pass client instance to functions needing live data
+  - Session liveMode flag: Store mode preference on session for persistence
+  - Health check on startup: Verify backend connection before enabling live features
+  - Trade output indicators: `[L]` for live, `[M]` for manual makes source visible at a glance
+
+---
+

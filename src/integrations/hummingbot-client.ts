@@ -318,6 +318,25 @@ export class HummingbotClient {
   }
 
   /**
+   * Get current price for a single symbol
+   * Convenience method that fetches the most recent candle close price
+   */
+  async getCurrentPrice(symbol: string): Promise<{ price: number; timestamp: number } | null> {
+    try {
+      const candles = await this.getCandles(symbol, "1m", 1);
+      if (candles.length > 0) {
+        return {
+          price: candles[0].close,
+          timestamp: candles[0].timestamp,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Get historical candle data
    */
   async getCandles(

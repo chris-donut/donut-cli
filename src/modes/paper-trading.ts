@@ -12,7 +12,9 @@ import {
   PaperPosition,
   PaperTrade,
   PaperSessionStatus,
+  PriceSource,
 } from "../core/types.js";
+import { HummingbotClient } from "../integrations/hummingbot-client.js";
 
 const PAPER_SESSIONS_DIR = ".sessions/paper";
 
@@ -21,7 +23,8 @@ const PAPER_SESSIONS_DIR = ".sessions/paper";
  */
 export async function createPaperSession(
   strategyId: string,
-  initialBalance: number
+  initialBalance: number,
+  liveMode: boolean = false
 ): Promise<PaperSession> {
   const session: PaperSession = {
     id: randomUUID(),
@@ -32,6 +35,7 @@ export async function createPaperSession(
     trades: [],
     startedAt: Date.now(),
     status: "running",
+    liveMode,
   };
 
   // Validate with Zod schema
@@ -175,15 +179,26 @@ export interface ExecuteTradeResult {
   error?: string;
 }
 
+export interface ExecuteTradeOptions {
+  sessionId: string;
+  symbol: string;
+  side: "long" | "short";
+  size: number;
+  price?: number;
+  hummingbotClient?: HummingbotClient;
+}
+
 /**
  * Execute a paper trade - opens a new position or adds to existing
+ * If price is not provided and hummingbotClient is available, fetches live price
  */
 export async function executePaperTrade(
   sessionId: string,
   symbol: string,
   side: "long" | "short",
   size: number,
-  price: number
+  price?: number,
+  hummingbotClient?: HummingbotClient
 ): Promise<ExecuteTradeResult> {
   const session = await getPaperSession(sessionId);
   if (!session) {
@@ -194,8 +209,27 @@ export async function executePaperTrade(
     return { success: false, error: `Session is ${session.status}, not running` };
   }
 
+  // Determine price and source
+  let tradePrice: number;
+  let priceSource: PriceSource = "manual";
+
+  if (price !== undefined) {
+    tradePrice = price;
+    priceSource = "manual";
+  } else if (hummingbotClient) {
+    // Fetch live price from Hummingbot
+    const livePrice = await hummingbotClient.getCurrentPrice(symbol);
+    if (!livePrice) {
+      return { success: false, error: `Failed to fetch live price for ${symbol}` };
+    }
+    tradePrice = livePrice.price;
+    priceSource = "live";
+  } else {
+    return { success: false, error: "Price is required when not using live mode" };
+  }
+
   // Calculate trade cost (simplified - no leverage simulation)
-  const tradeCost = size * price;
+  const tradeCost = size * tradePrice;
   if (tradeCost > session.balance) {
     return { success: false, error: `Insufficient balance: need $${tradeCost.toFixed(2)}, have $${session.balance.toFixed(2)}` };
   }
@@ -206,8 +240,9 @@ export async function executePaperTrade(
     symbol,
     side,
     size,
-    entryPrice: price,
+    entryPrice: tradePrice,
     timestamp: Date.now(),
+    priceSource,
   };
 
   // Check if we already have a position in this symbol
@@ -221,7 +256,7 @@ export async function executePaperTrade(
     // Add to existing position (average entry price)
     const existing = session.positions[existingPositionIndex];
     const totalSize = existing.size + size;
-    const avgPrice = (existing.entryPrice * existing.size + price * size) / totalSize;
+    const avgPrice = (existing.entryPrice * existing.size + tradePrice * size) / totalSize;
 
     position = {
       symbol,
@@ -238,7 +273,7 @@ export async function executePaperTrade(
       symbol,
       side,
       size,
-      entryPrice: price,
+      entryPrice: tradePrice,
       unrealizedPnl: 0,
     };
 
@@ -256,12 +291,14 @@ export async function executePaperTrade(
 
 /**
  * Close a paper position - fully or partially
+ * If exitPrice is not provided and hummingbotClient is available, fetches live price
  */
 export async function closePaperPosition(
   sessionId: string,
   symbol: string,
-  exitPrice: number,
-  closeSize?: number
+  exitPrice?: number,
+  closeSize?: number,
+  hummingbotClient?: HummingbotClient
 ): Promise<ExecuteTradeResult> {
   const session = await getPaperSession(sessionId);
   if (!session) {
@@ -285,8 +322,27 @@ export async function closePaperPosition(
     return { success: false, error: `Cannot close ${sizeToClose}, position size is ${position.size}` };
   }
 
+  // Determine exit price and source
+  let finalExitPrice: number;
+  let priceSource: PriceSource = "manual";
+
+  if (exitPrice !== undefined) {
+    finalExitPrice = exitPrice;
+    priceSource = "manual";
+  } else if (hummingbotClient) {
+    // Fetch live price from Hummingbot
+    const livePrice = await hummingbotClient.getCurrentPrice(symbol);
+    if (!livePrice) {
+      return { success: false, error: `Failed to fetch live price for ${symbol}` };
+    }
+    finalExitPrice = livePrice.price;
+    priceSource = "live";
+  } else {
+    return { success: false, error: "Exit price is required when not using live mode" };
+  }
+
   // Calculate PnL
-  const pnl = calculatePnL(position.side, position.entryPrice, exitPrice, sizeToClose);
+  const pnl = calculatePnL(position.side, position.entryPrice, finalExitPrice, sizeToClose);
 
   // Find the original trade to update (or create a closing trade record)
   const closingTrade: PaperTrade = {
@@ -295,10 +351,11 @@ export async function closePaperPosition(
     side: position.side,
     size: sizeToClose,
     entryPrice: position.entryPrice,
-    exitPrice,
+    exitPrice: finalExitPrice,
     pnl,
     timestamp: Date.now(),
     closedAt: Date.now(),
+    priceSource,
   };
 
   // Update or remove position
