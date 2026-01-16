@@ -7,5 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #852 | 12:49 PM | 🔴 | Fixed TypeScript import path to remove .js extension | ~228 |
+| #947 | 1:08 PM | 🔵 | nofx MCP Server Tool Definitions and Architecture | ~614 |
 </claude-mem-context>

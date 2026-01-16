@@ -1,0 +1,91 @@
+# Ralph Progress Log - Donut CLI MVP
+
+## Project Context
+- TypeScript CLI using Claude Agent SDK
+- Two existing backends: nofx (Go backtest engine), Hummingbot Dashboard
+- Target: Paper trading + Telegram notifications + Demo mode
+
+## Codebase Patterns
+- Use Zod schemas for type definitions with `z.infer<>` to derive TypeScript types
+- Follow existing section structure in types.ts with clear header comments
+- UUID validation uses `z.string().uuid()` from Zod
+
+## Iteration History
+
+### 2026-01-15 19:25 - US-001
+- **What was implemented**: Paper trading type definitions
+- **Files changed**: src/core/types.ts
+- **Learnings for future iterations:**
+  - Types follow pattern: Schema first, then `export type X = z.infer<typeof XSchema>`
+  - Existing SideSchema can be reused for paper trading sides
+  - New type sections go between existing sections with clear comment headers
+
+---
+
+### 2026-01-15 19:28 - US-002
+- **What was implemented**: Notification type definitions for Telegram, Discord, webhook
+- **Files changed**: src/core/types.ts
+- **Learnings for future iterations:**
+  - Use `z.union()` for channel-specific settings that vary by type
+  - TradeApprovalRequest includes both createdAt and expiresAt for timeout handling
+  - Discord uses webhookUrl pattern while Telegram uses bot token + chat ID
+
+---
+
+### 2026-01-15 19:32 - US-003
+- **What was implemented**: Paper trading session manager with full CRUD
+- **Files changed**: src/modes/paper-trading.ts (new file)
+- **Learnings for future iterations:**
+  - Created new `modes` directory for operational modes (paper, demo, etc.)
+  - Used `randomUUID()` from Node's crypto module for session IDs
+  - Sessions stored in `.sessions/paper/` with `{sessionId}.json` naming
+  - Zod validation on read/write ensures type safety at boundaries
+
+---
+
+### 2026-01-15 19:36 - US-004
+- **What was implemented**: Paper trade execution with PnL calculations
+- **Files changed**: src/modes/paper-trading.ts
+- **Learnings for future iterations:**
+  - PnL for long: (exit - entry) * size; short: (entry - exit) * size
+  - Position averaging: newAvgPrice = (oldPrice*oldSize + newPrice*newSize) / totalSize
+  - Balance management: deduct on open, return principal + pnl on close
+  - ExecuteTradeResult pattern provides structured success/error responses
+
+---
+
+### 2026-01-15 19:42 - US-005
+- **What was implemented**: Paper trading CLI commands (start, status, trades, stop, list)
+- **Files changed**: src/index.ts
+- **Learnings for future iterations:**
+  - Commander.js: use `program.command("parent").command("child")` for subcommands
+  - Partial ID matching with `s.id.startsWith(sessionId)` for user convenience
+  - Chalk color pattern: green for profits/running, red for losses, yellow for paused/warning
+  - Always show helpful next-step commands after operations
+
+---
+
+### 2026-01-15 19:47 - US-006
+- **What was implemented**: Telegram Bot API client for notifications
+- **Files changed**: src/integrations/telegram-client.ts (new file)
+- **Learnings for future iterations:**
+  - Telegram Bot API uses `https://api.telegram.org/bot{TOKEN}/{method}`
+  - Inline keyboards use `reply_markup.inline_keyboard` with callback_data
+  - callback_data format: `action:tradeId` for easy parsing in webhook
+  - HTML parse_mode allows <b>, <i>, <code> tags for formatting
+
+---
+
+### 2026-01-15 19:55 - US-007
+- **What was implemented**: Telegram webhook server for receiving approval callbacks
+- **Files changed**: src/integrations/telegram-client.ts
+- **Learnings for future iterations:**
+  - Node http module: `createServer()` with `req.on('data')` and `req.on('end')` for body parsing
+  - Telegram sends `callback_query` updates for inline button clicks
+  - Must call `answerCallbackQuery` to remove loading state from button
+  - Promise-based waiting: store resolve function in Map, call when callback arrives
+  - One-time use pattern: set `used: boolean` flag before resolving to prevent double-processing
+  - Cleanup intervals: use `setInterval` to periodically expire stale pending items
+
+---
+

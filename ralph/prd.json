@@ -1,0 +1,197 @@
+{
+  "project": "Donut CLI - MVP Phase 1",
+  "branchName": "ralph/mvp-paper-trading-notifications",
+  "description": "Implement MVP features: Paper Trading Mode with live data simulation, Telegram notifications with remote approval, and built-in demo mode for onboarding.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add Paper Trading Types and Schemas",
+      "description": "As a developer, I want paper trading types defined in core/types.ts so that the paper trading system has proper type safety",
+      "acceptanceCriteria": [
+        "Add PaperSession interface with id, strategyId, balance, positions, trades, startedAt, status fields",
+        "Add PaperTrade interface with id, symbol, side, size, entryPrice, exitPrice, pnl, timestamp fields",
+        "Add PaperPosition interface with symbol, side, size, entryPrice, unrealizedPnl fields",
+        "Add PaperSessionStatus enum with 'running', 'paused', 'stopped' values",
+        "Export all new types from types.ts",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Completed - Added PaperSession, PaperTrade, PaperPosition schemas with Zod validation"
+    },
+    {
+      "id": "US-002",
+      "title": "Add Notification Types and Schemas",
+      "description": "As a developer, I want notification types defined so that Telegram and other channels have proper type definitions",
+      "acceptanceCriteria": [
+        "Add NotificationChannel type with 'telegram', 'discord', 'webhook' options",
+        "Add NotificationConfig interface with channel, enabled, settings fields",
+        "Add TelegramConfig interface with botToken, chatId fields",
+        "Add TradeApprovalRequest interface with tradeId (UUID), symbol, side, size, price, expiresAt fields",
+        "Add ApprovalResponse type with 'APPROVE', 'REJECT', 'EXPIRED' options",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Completed - Added NotificationChannel, TelegramConfig, TradeApprovalRequest, ApprovalResponse types"
+    },
+    {
+      "id": "US-003",
+      "title": "Create Paper Trading Session Manager",
+      "description": "As a user, I want to create and manage paper trading sessions so that I can test strategies without risking real money",
+      "acceptanceCriteria": [
+        "Create src/modes/paper-trading.ts file",
+        "Implement createPaperSession(strategyId, initialBalance) function returning PaperSession",
+        "Implement getPaperSession(sessionId) function",
+        "Implement listPaperSessions() function returning all sessions",
+        "Sessions persist to .sessions/paper/ directory as JSON files",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Completed - Created paper-trading.ts with session CRUD, persistence to .sessions/paper/"
+    },
+    {
+      "id": "US-004",
+      "title": "Implement Paper Trade Execution Logic",
+      "description": "As a user, I want paper trades to execute against simulated prices so that I can see realistic trade results",
+      "acceptanceCriteria": [
+        "Add executePaperTrade(sessionId, symbol, side, size, price) to paper-trading.ts",
+        "Trade creates a PaperTrade record and updates session balance",
+        "Add closePaperPosition(sessionId, symbol, exitPrice) function",
+        "Calculate PnL correctly for long and short positions",
+        "Update session's positions array on trade execution",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Completed - executePaperTrade, closePaperPosition with PnL calculation"
+    },
+    {
+      "id": "US-005",
+      "title": "Add Paper Trading CLI Commands",
+      "description": "As a user, I want CLI commands for paper trading so that I can start, monitor, and stop paper sessions from terminal",
+      "acceptanceCriteria": [
+        "Add 'donut paper start --strategy <name> --balance <amount>' command to index.ts",
+        "Add 'donut paper status [sessionId]' command showing session metrics",
+        "Add 'donut paper trades [sessionId]' command listing all trades",
+        "Add 'donut paper stop <sessionId>' command to end session",
+        "Commands use Ora spinners and Chalk formatting consistent with existing CLI",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Completed - paper start/status/trades/stop/list commands with Chalk/Ora formatting"
+    },
+    {
+      "id": "US-006",
+      "title": "Create Telegram Client Module",
+      "description": "As a developer, I want a Telegram client so that the CLI can send notifications and receive approval responses",
+      "acceptanceCriteria": [
+        "Create src/integrations/telegram-client.ts file",
+        "Implement sendMessage(chatId, message) function using Telegram Bot API",
+        "Implement sendTradeApproval(chatId, tradeApproval: TradeApprovalRequest) with inline keyboard buttons",
+        "Use fetch for HTTP calls to api.telegram.org",
+        "Read TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID from environment",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Completed - sendMessage, sendTradeApproval with inline keyboard, validateCredentials"
+    },
+    {
+      "id": "US-007",
+      "title": "Implement Telegram Webhook Handler",
+      "description": "As a user, I want to approve or reject trades via Telegram replies so that I can manage trades remotely",
+      "acceptanceCriteria": [
+        "Add startWebhookServer(port) function to telegram-client.ts",
+        "Parse callback_query updates for APPROVE/REJECT button clicks",
+        "Store pending approvals in memory with UUID trade IDs",
+        "Implement waitForApproval(tradeId, timeoutMs) returning ApprovalResponse",
+        "Trade IDs are one-time use (expire after first response)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Completed - startWebhookServer, waitForApproval, requestApprovalAndWait with one-time UUID handling"
+    },
+    {
+      "id": "US-008",
+      "title": "Add Notification CLI Commands",
+      "description": "As a user, I want CLI commands to configure and test notifications so that I can set up Telegram alerts",
+      "acceptanceCriteria": [
+        "Add 'donut notify setup telegram --token <token> --chat <chatId>' command",
+        "Store config in ~/.donut/notifications.json",
+        "Add 'donut notify test' command sending test message to configured channels",
+        "Add 'donut notify status' showing configured channels",
+        "Commands validate Telegram credentials by sending test message",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "CLI for notification configuration"
+    },
+    {
+      "id": "US-009",
+      "title": "Create Demo Mode Data Generator",
+      "description": "As a new user, I want demo mode with sample data so that I can learn the CLI without setting up backends",
+      "acceptanceCriteria": [
+        "Create src/modes/demo-mode.ts file",
+        "Implement generateDemoStrategy() returning a sample momentum strategy",
+        "Implement generateDemoBacktestResults() returning fake metrics (Sharpe, drawdown, etc.)",
+        "Implement generateDemoTrades() returning 10-20 sample trades",
+        "Demo data is realistic but clearly marked as '[DEMO]' in output",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Demo data generators for onboarding"
+    },
+    {
+      "id": "US-010",
+      "title": "Add Demo Mode CLI Integration",
+      "description": "As a new user, I want 'donut demo' command so that I can try the CLI features immediately",
+      "acceptanceCriteria": [
+        "Add 'donut demo' command that runs interactive demo tour",
+        "Demo shows: strategy list, backtest run (fake), results analysis",
+        "Add '--demo' flag to 'donut start' to use demo backends",
+        "Demo mode skips backend health checks",
+        "Clear '[DEMO MODE]' indicator in all demo output",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "CLI entry point for demo mode"
+    },
+    {
+      "id": "US-011",
+      "title": "Integrate Paper Trading with Live Data Feed",
+      "description": "As a user, I want paper trading to use real market prices so that simulation is realistic",
+      "acceptanceCriteria": [
+        "Add getCurrentPrice(symbol) function to hummingbot-client.ts using candle endpoint",
+        "Paper trade execution fetches live price if no price provided",
+        "Add --live flag to 'donut paper start' to enable live price updates",
+        "Log price source (live vs manual) in trade records",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Connect paper trading to live market data"
+    },
+    {
+      "id": "US-012",
+      "title": "Add Paper vs Backtest Comparison View",
+      "description": "As a user, I want to compare paper trading results with backtest predictions so that I can validate strategy performance",
+      "acceptanceCriteria": [
+        "Add 'donut paper compare <sessionId> <backtestRunId>' command",
+        "Display side-by-side table with: total PnL, win rate, max drawdown, Sharpe",
+        "Calculate delta percentage between paper and backtest metrics",
+        "Highlight significant deviations (>20% difference) in red",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Comparison dashboard as specified in design decisions"
+    }
+  ]
+}

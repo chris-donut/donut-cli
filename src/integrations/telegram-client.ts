@@ -3,9 +3,36 @@
  * Handles sending notifications and trade approval requests via Telegram
  */
 
-import { TradeApprovalRequest } from "../core/types.js";
+import { createServer, IncomingMessage, ServerResponse, Server } from "http";
+import { TradeApprovalRequest, ApprovalResponse } from "../core/types.js";
 
 const TELEGRAM_API_BASE = "https://api.telegram.org/bot";
+
+// ============================================================================
+// Pending Approvals Store (in-memory)
+// ============================================================================
+
+interface PendingApproval {
+  tradeId: string;
+  messageId: number;
+  expiresAt: number;
+  resolve: (response: ApprovalResponse) => void;
+  used: boolean;
+}
+
+const pendingApprovals = new Map<string, PendingApproval>();
+
+// Cleanup expired approvals periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [tradeId, approval] of pendingApprovals.entries()) {
+    if (approval.expiresAt < now && !approval.used) {
+      approval.used = true;
+      approval.resolve("EXPIRED");
+      pendingApprovals.delete(tradeId);
+    }
+  }
+}, 1000);
 
 /**
  * Configuration for the Telegram client
@@ -217,6 +244,215 @@ export async function validateCredentials(
     valid: result.success,
     error: result.error,
   };
+}
+
+// ============================================================================
+// Webhook Server for Telegram Callbacks
+// ============================================================================
+
+/**
+ * Telegram callback query structure from inline keyboard buttons
+ */
+interface TelegramCallbackQuery {
+  id: string;
+  from: { id: number; username?: string };
+  message?: { message_id: number; chat: { id: number } };
+  data?: string;
+}
+
+/**
+ * Telegram update structure (simplified for callback_query)
+ */
+interface TelegramUpdate {
+  update_id: number;
+  callback_query?: TelegramCallbackQuery;
+}
+
+let webhookServer: Server | null = null;
+
+/**
+ * Answer a callback query to acknowledge button click
+ */
+async function answerCallbackQuery(
+  config: TelegramClientConfig,
+  callbackQueryId: string,
+  text?: string
+): Promise<void> {
+  try {
+    const url = `${TELEGRAM_API_BASE}${config.botToken}/answerCallbackQuery`;
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text || "Received",
+      }),
+    });
+  } catch {
+    // Ignore errors for callback acknowledgment
+  }
+}
+
+/**
+ * Start a webhook server to receive Telegram updates
+ * @param port - Port to listen on
+ * @param config - Telegram client config for answering callbacks
+ * @returns Promise resolving when server is started
+ */
+export function startWebhookServer(
+  port: number,
+  config: TelegramClientConfig
+): Promise<{ success: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    if (webhookServer) {
+      resolve({ success: true }); // Already running
+      return;
+    }
+
+    webhookServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+      // Only accept POST requests
+      if (req.method !== "POST") {
+        res.writeHead(405);
+        res.end("Method Not Allowed");
+        return;
+      }
+
+      // Parse request body
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk.toString();
+      });
+
+      req.on("end", async () => {
+        try {
+          const update: TelegramUpdate = JSON.parse(body);
+
+          // Handle callback_query (button clicks)
+          if (update.callback_query) {
+            const query = update.callback_query;
+            const data = query.data || "";
+
+            // Parse callback data format: "action:tradeId"
+            const [action, tradeId] = data.split(":");
+
+            if (tradeId && (action === "approve" || action === "reject")) {
+              const pending = pendingApprovals.get(tradeId);
+
+              if (pending && !pending.used) {
+                // Mark as used (one-time)
+                pending.used = true;
+
+                // Resolve the waiting promise
+                const response: ApprovalResponse = action === "approve" ? "APPROVE" : "REJECT";
+                pending.resolve(response);
+
+                // Update the message to show result
+                if (query.message) {
+                  const statusEmoji = action === "approve" ? "✅" : "❌";
+                  const statusText = action === "approve" ? "APPROVED" : "REJECTED";
+                  await editMessage(
+                    config,
+                    query.message.message_id,
+                    `${statusEmoji} Trade ${statusText}\n\n🆔 <code>${tradeId.slice(0, 8)}...</code>`,
+                    { removeKeyboard: true }
+                  );
+                }
+
+                // Answer callback to remove loading state
+                await answerCallbackQuery(config, query.id, `Trade ${action}d`);
+
+                // Clean up
+                pendingApprovals.delete(tradeId);
+              } else {
+                // Trade already processed or expired
+                await answerCallbackQuery(config, query.id, "Trade already processed or expired");
+              }
+            }
+          }
+
+          res.writeHead(200);
+          res.end("OK");
+        } catch {
+          res.writeHead(400);
+          res.end("Bad Request");
+        }
+      });
+    });
+
+    webhookServer.on("error", (err) => {
+      resolve({ success: false, error: err.message });
+    });
+
+    webhookServer.listen(port, () => {
+      resolve({ success: true });
+    });
+  });
+}
+
+/**
+ * Stop the webhook server
+ */
+export function stopWebhookServer(): Promise<void> {
+  return new Promise((resolve) => {
+    if (webhookServer) {
+      webhookServer.close(() => {
+        webhookServer = null;
+        resolve();
+      });
+    } else {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Wait for a trade approval response
+ * @param tradeId - UUID of the trade
+ * @param messageId - Telegram message ID for the approval request
+ * @param timeoutMs - Timeout in milliseconds (default 60 seconds)
+ * @returns Promise resolving to the approval response
+ */
+export function waitForApproval(
+  tradeId: string,
+  messageId: number,
+  timeoutMs: number = 60000
+): Promise<ApprovalResponse> {
+  return new Promise((resolve) => {
+    const expiresAt = Date.now() + timeoutMs;
+
+    // Store pending approval
+    pendingApprovals.set(tradeId, {
+      tradeId,
+      messageId,
+      expiresAt,
+      resolve,
+      used: false,
+    });
+  });
+}
+
+/**
+ * Request trade approval and wait for response
+ * Combines sendTradeApproval and waitForApproval for convenience
+ */
+export async function requestApprovalAndWait(
+  config: TelegramClientConfig,
+  approval: TradeApprovalRequest
+): Promise<{ response: ApprovalResponse; error?: string }> {
+  // Send the approval message
+  const result = await sendTradeApproval(config, approval);
+
+  if (!result.success || !result.messageId) {
+    return { response: "EXPIRED", error: result.error || "Failed to send approval request" };
+  }
+
+  // Calculate remaining timeout
+  const remainingMs = Math.max(0, approval.expiresAt - Date.now());
+
+  // Wait for response
+  const response = await waitForApproval(approval.tradeId, result.messageId, remainingMs);
+
+  return { response };
 }
 
 /**
