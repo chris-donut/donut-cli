@@ -355,3 +355,130 @@ export function uniqueBy<T>(array: T[], keyFn: (item: T) => unknown): T[] {
     return true;
   });
 }
+
+// ============================================================================
+// Safe Number Parsing
+// ============================================================================
+
+/**
+ * Safely parse an integer with validation
+ * @throws ValidationError if parsing fails or value is out of bounds
+ */
+export function parseIntSafe(
+  value: string | number | undefined,
+  fieldName: string,
+  options?: { min?: number; max?: number; defaultValue?: number }
+): number {
+  if (value === undefined || value === "") {
+    if (options?.defaultValue !== undefined) {
+      return options.defaultValue;
+    }
+    throw new ValidationError(`${fieldName} is required`, { field: fieldName });
+  }
+
+  const parsed = typeof value === "number" ? value : parseInt(String(value), 10);
+
+  if (isNaN(parsed) || !isFinite(parsed)) {
+    throw new ValidationError(
+      `Invalid integer for ${fieldName}: "${value}"`,
+      { field: fieldName, value }
+    );
+  }
+
+  if (options?.min !== undefined && parsed < options.min) {
+    throw new ValidationError(
+      `${fieldName} must be at least ${options.min}, got ${parsed}`,
+      { field: fieldName, value: parsed, context: { min: options.min } }
+    );
+  }
+
+  if (options?.max !== undefined && parsed > options.max) {
+    throw new ValidationError(
+      `${fieldName} must be at most ${options.max}, got ${parsed}`,
+      { field: fieldName, value: parsed, context: { max: options.max } }
+    );
+  }
+
+  return parsed;
+}
+
+/**
+ * Safely parse a float with validation
+ * @throws ValidationError if parsing fails or value is out of bounds
+ */
+export function parseFloatSafe(
+  value: string | number | undefined,
+  fieldName: string,
+  options?: { min?: number; max?: number; defaultValue?: number }
+): number {
+  if (value === undefined || value === "") {
+    if (options?.defaultValue !== undefined) {
+      return options.defaultValue;
+    }
+    throw new ValidationError(`${fieldName} is required`, { field: fieldName });
+  }
+
+  const parsed = typeof value === "number" ? value : parseFloat(String(value));
+
+  if (isNaN(parsed) || !isFinite(parsed)) {
+    throw new ValidationError(
+      `Invalid number for ${fieldName}: "${value}"`,
+      { field: fieldName, value }
+    );
+  }
+
+  if (options?.min !== undefined && parsed < options.min) {
+    throw new ValidationError(
+      `${fieldName} must be at least ${options.min}, got ${parsed}`,
+      { field: fieldName, value: parsed, context: { min: options.min } }
+    );
+  }
+
+  if (options?.max !== undefined && parsed > options.max) {
+    throw new ValidationError(
+      `${fieldName} must be at most ${options.max}, got ${parsed}`,
+      { field: fieldName, value: parsed, context: { max: options.max } }
+    );
+  }
+
+  return parsed;
+}
+
+/**
+ * Try to parse a number, returning undefined on failure (no throw)
+ * Useful for optional numeric fields
+ */
+export function tryParseNumber(value: string | number | undefined): number | undefined {
+  if (value === undefined || value === "") {
+    return undefined;
+  }
+
+  const parsed = typeof value === "number" ? value : parseFloat(String(value));
+
+  if (isNaN(parsed) || !isFinite(parsed)) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+/**
+ * Coerce a value to a number, with safe fallback
+ * Returns defaultValue if parsing fails
+ */
+export function toNumber(
+  value: unknown,
+  defaultValue: number
+): number {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  const parsed = Number(value);
+
+  if (isNaN(parsed) || !isFinite(parsed)) {
+    return defaultValue;
+  }
+
+  return parsed;
+}
