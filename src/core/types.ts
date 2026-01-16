@@ -441,6 +441,30 @@ export interface AgentResult {
     totalDurationMs: number;
     summary?: string;
   };
+  /** Execution metrics for performance monitoring and debugging */
+  metrics?: {
+    agentType: string;
+    sessionId?: string;
+    stage: string;
+    startTime: number;
+    endTime?: number;
+    totalDurationMs: number;
+    totalIterations: number;
+    maxIterations: number;
+    iterationLimitReached: boolean;
+    totalToolCalls: number;
+    successfulToolCalls: number;
+    failedToolCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    contextTokensUsed: number;
+    contextTokensMax: number;
+    reasoningSteps: number;
+    success: boolean;
+    aborted: boolean;
+    error?: string;
+  };
 }
 
 export interface StageResult {

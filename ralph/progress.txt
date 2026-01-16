@@ -185,3 +185,36 @@ Total commits: 4 (modularization, logging, retry, shutdown, events)
   - Log cancellation with iteration count for debugging
 
 ---
+
+### 2026-01-16 15:20 - AG-006 (Agent Metrics and Observability)
+- **What was implemented**: Comprehensive execution metrics system
+- **Files changed**:
+  - src/agents/metrics.ts (new - MetricsCollector, AgentMetrics, formatting)
+  - src/agents/base-agent.ts (integrated metrics collection throughout run)
+  - src/core/events.ts (added AgentMetricsEvent type)
+  - src/core/types.ts (added metrics field to AgentResult)
+- **Learnings for future iterations:**
+  - Per-tool metrics (call count, avg duration, success rate) enable bottleneck identification
+  - MetricsCollector pattern separates concerns from agent logic
+  - Track metrics at start/end boundaries, not in between, to avoid timing complexity
+  - Aggregate metrics (toolMetrics Map) summarize per-tool performance automatically
+  - formatMetricsReport() for detailed analysis, formatMetricsSummary() for compact display
+  - metricsHistory array enables session-wide performance analysis
+  - Token estimation uses same heuristic as context manager (~4 chars/token)
+  - Emit agent:metrics event for external consumers (TUI, logging, analytics)
+
+---
+
+## PHASE 2 COMPLETE - All 6 Agent Improvement Stories Implemented
+
+Summary:
+- AG-001: ReAct-style reasoning loop with scratchpad
+- AG-002: Context compaction with local summarization
+- AG-003: Iteration limits with graceful degradation
+- AG-004: Agent factory pattern with fluent builder
+- AG-005: AbortSignal support for cancellation
+- AG-006: Agent metrics and observability
+
+Total commits: 6 (one per user story)
+
+---

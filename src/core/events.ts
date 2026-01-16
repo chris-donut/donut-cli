@@ -75,6 +75,29 @@ export interface AgentStreamEvent extends BaseEvent {
 }
 
 /**
+ * Agent metrics event (emitted at end of run)
+ */
+export interface AgentMetricsEvent extends BaseEvent {
+  type: "agent:metrics";
+  agentName: string;
+  metrics: {
+    agentType: string;
+    sessionId?: string;
+    stage: string;
+    totalDurationMs: number;
+    totalIterations: number;
+    totalToolCalls: number;
+    successfulToolCalls: number;
+    failedToolCalls: number;
+    totalTokens: number;
+    reasoningSteps: number;
+    success: boolean;
+    aborted: boolean;
+    error?: string;
+  };
+}
+
+/**
  * Union type of all tool-related events
  */
 export type ToolEvent = ToolStartEvent | ToolEndEvent | ToolErrorEvent;
@@ -82,7 +105,7 @@ export type ToolEvent = ToolStartEvent | ToolEndEvent | ToolErrorEvent;
 /**
  * Union type of all agent-related events
  */
-export type AgentEvent = AgentThinkingEvent | AgentStreamEvent;
+export type AgentEvent = AgentThinkingEvent | AgentStreamEvent | AgentMetricsEvent;
 
 /**
  * Union type of all events
@@ -103,6 +126,7 @@ export type EventMap = {
   "tool:error": ToolErrorEvent;
   "agent:thinking": AgentThinkingEvent;
   "agent:stream": AgentStreamEvent;
+  "agent:metrics": AgentMetricsEvent;
 };
 
 // ============================================================================

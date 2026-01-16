@@ -36,6 +36,12 @@ import {
   formatContextUsage,
 } from "./context-manager.js";
 import {
+  MetricsCollector,
+  AgentMetrics,
+  formatMetricsReport,
+  formatMetricsSummary,
+} from "./metrics.js";
+import {
   ConsoleLogger,
   createDefaultDependencies,
   DefaultMcpServerProvider,
@@ -133,6 +139,12 @@ export abstract class BaseAgent {
 
   /** Warning threshold (percentage of maxIterations) */
   protected readonly iterationWarningThreshold: number = 0.8;
+
+  /** Current run's metrics collector */
+  protected metricsCollector?: MetricsCollector;
+
+  /** Historical metrics from previous runs (for session analysis) */
+  protected metricsHistory: AgentMetrics[] = [];
 
   constructor(config: AgentConfig) {
     this.config = config;
@@ -256,6 +268,13 @@ export abstract class BaseAgent {
     this.iterationCount = 0;
     this.scratchpad.startThinking(`Processing prompt: ${prompt.slice(0, 100)}...`);
 
+    // Initialize metrics collector for this run
+    this.metricsCollector = new MetricsCollector(this.agentType, stage);
+    this.metricsCollector.setMaxIterations(this.maxIterations);
+
+    // Track input tokens from prompt
+    this.metricsCollector.addInputTokens(Math.ceil(prompt.length / 4));
+
     try {
       // Process streaming messages from the agent
       for await (const message of query({ prompt, options }) as AsyncIterable<AgentMessage>) {
@@ -265,39 +284,49 @@ export abstract class BaseAgent {
             iterations: this.iterationCount,
             stage,
           });
+          this.metricsCollector?.markAborted();
           result = this.generatePartialResult("Aborted by user");
           break;
         }
 
         // Check iteration limit before processing
         if (this.checkIterationLimit()) {
+          this.metricsCollector?.markIterationLimitReached();
           result = this.generateProgressSummary();
           break;
         }
+
+        // Track iteration in metrics
+        this.metricsCollector?.recordIteration();
 
         await this.processMessage(message, stage);
 
         // Capture session ID from init message
         if (message.type === "system" && message.subtype === "init" && message.session_id) {
           this.sessionId = message.session_id;
+          this.metricsCollector?.setSessionId(this.sessionId);
           await this.sessionProvider.updateAgentSession(this.agentType, this.sessionId);
         }
 
         // Capture final result
         if (message.type === "result" && message.subtype === "success" && message.result) {
           result = message.result;
+          // Track output tokens from result
+          this.metricsCollector?.addOutputTokens(Math.ceil(result.length / 4));
         }
 
         // Handle errors
         if (message.type === "result" && message.subtype === "error") {
           success = false;
           errorMessage = message.result || "Unknown error";
+          this.metricsCollector?.setError(errorMessage);
         }
       }
     } catch (error) {
       success = false;
       errorMessage = error instanceof Error ? error.message : String(error);
       this.scratchpad.markError(errorMessage);
+      this.metricsCollector?.setError(errorMessage);
       this.logger.error("Agent run failed", {
         error: errorMessage,
         stage,
@@ -310,11 +339,47 @@ export abstract class BaseAgent {
 
     // Get the reasoning trace for inclusion in result
     const reasoningTrace = this.getReasoningTrace();
-    this.logger.debug("Agent run completed", {
-      success,
-      reasoningSteps: reasoningTrace.steps.length,
-      totalDurationMs: reasoningTrace.totalDurationMs,
-    });
+
+    // Update metrics with final reasoning step count and context usage
+    if (this.metricsCollector) {
+      const contextUsage = this.contextManager.getUsage();
+      this.metricsCollector.updateContextUsage(
+        contextUsage.totalTokens,
+        this.contextManager.getConfig().maxTokens
+      );
+
+      // Update reasoning step count
+      for (const _ of reasoningTrace.steps) {
+        this.metricsCollector.recordReasoningStep();
+      }
+    }
+
+    // Finalize and store metrics
+    const finalMetrics = this.metricsCollector?.finalize(success);
+    if (finalMetrics) {
+      this.metricsHistory.push(finalMetrics);
+
+      // Emit metrics event
+      await eventBus.emit({
+        type: "agent:metrics",
+        agentName: this.agentType,
+        metrics: finalMetrics,
+        timestamp: Date.now(),
+      });
+
+      this.logger.debug("Agent run completed", {
+        success,
+        reasoningSteps: reasoningTrace.steps.length,
+        totalDurationMs: finalMetrics.totalDurationMs,
+        totalToolCalls: finalMetrics.totalToolCalls,
+      });
+    } else {
+      this.logger.debug("Agent run completed", {
+        success,
+        reasoningSteps: reasoningTrace.steps.length,
+        totalDurationMs: reasoningTrace.totalDurationMs,
+      });
+    }
 
     return {
       agentType: this.agentType,
@@ -325,6 +390,7 @@ export abstract class BaseAgent {
       timestamp: new Date(),
       error: errorMessage,
       reasoningTrace, // Include trace in result for debugging
+      metrics: finalMetrics, // Include metrics in result
     };
   }
 
@@ -376,6 +442,10 @@ export abstract class BaseAgent {
     // Record action in reasoning scratchpad
     this.scratchpad.recordAction(toolName, toolInput);
 
+    // Start tracking tool call in metrics
+    const inputSize = JSON.stringify(toolInput).length;
+    this.metricsCollector?.startToolCall(toolName, inputSize);
+
     if (isHighRiskTool(toolName)) {
       const context: ToolExecutionContext = {
         toolName,
@@ -415,6 +485,10 @@ export abstract class BaseAgent {
     const resultText = typeof message.result === "string"
       ? message.result
       : JSON.stringify(message.result);
+
+    // End tool call tracking in metrics (success if we got a result)
+    const outputSize = resultText.length;
+    this.metricsCollector?.endToolCall(toolName, true, outputSize);
 
     // Track tool result in context manager (may summarize if too large)
     const { summarized } = this.contextManager.addToolResult(toolName, message.result);
@@ -530,6 +604,61 @@ export abstract class BaseAgent {
   hasReachedIterationLimit(): boolean {
     return this.iterationCount >= this.maxIterations;
   }
+
+  // ============================================================================
+  // Metrics API
+  // ============================================================================
+
+  /**
+   * Get the current run's metrics snapshot (if a run is in progress)
+   */
+  getCurrentMetrics(): AgentMetrics | undefined {
+    return this.metricsCollector?.getSnapshot();
+  }
+
+  /**
+   * Get the last completed run's metrics
+   */
+  getLastMetrics(): AgentMetrics | undefined {
+    return this.metricsHistory.length > 0
+      ? this.metricsHistory[this.metricsHistory.length - 1]
+      : undefined;
+  }
+
+  /**
+   * Get historical metrics for all runs in this session
+   */
+  getMetricsHistory(): AgentMetrics[] {
+    return [...this.metricsHistory];
+  }
+
+  /**
+   * Get formatted metrics report for the last run
+   */
+  getFormattedMetricsReport(): string | undefined {
+    const lastMetrics = this.getLastMetrics();
+    return lastMetrics ? formatMetricsReport(lastMetrics) : undefined;
+  }
+
+  /**
+   * Get a compact metrics summary for the last run
+   */
+  getMetricsSummary(): string | undefined {
+    const lastMetrics = this.getLastMetrics();
+    return lastMetrics ? formatMetricsSummary(lastMetrics) : undefined;
+  }
+
+  /**
+   * Clear metrics history (useful for testing or long sessions)
+   */
+  clearMetricsHistory(): void {
+    this.metricsHistory = [];
+    this.logger.debug("Metrics history cleared");
+  }
+
+  // ============================================================================
+  // Protected Helpers
+  // ============================================================================
 
   /**
    * Generate a partial result when agent is cancelled
