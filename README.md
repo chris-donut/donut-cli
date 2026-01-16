@@ -1,82 +1,255 @@
-# Donut CLI 🍩
+# Donut CLI
 
-A spinning ASCII donut animation for your terminal, implemented in TypeScript.
-
-Based on the classic [donut.c](https://www.a1k0n.net/2011/07/20/donut-math.html) by Andy Sloane (2006).
+AI-powered crypto trading terminal with multi-agent orchestration powered by the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript).
 
 ```
-                         $@@@@@@@@$#
-                     #@@$$$$########**!
-                   @$$$$####****!!!!====;
-                 #$$$####***!!!!====;;;::~
-                #$$####***!!===;;;:::~~--,
-               #$$####***!!==;;::~~--,,..
-              *$####***!!!==;::~--,,...
-              *####****!!==;;:~-,,...
-              !***!!!!!!!==;::~-,...
-              =!!!!!!!===;;::~-,..
-              ;=======;;;::~~-,.
-               :;;;;;:::~~--,.
-                ~:::::~~--,.
-                 -~~~~---,.
-                   ,----,.
+    ╔═══════════════════════════════════════════════════════════╗
+    ║                                                           ║
+    ║   ██████╗  ██████╗ ███╗   ██╗██╗   ██╗████████╗           ║
+    ║   ██╔══██╗██╔═══██╗████╗  ██║██║   ██║╚══██╔══╝           ║
+    ║   ██║  ██║██║   ██║██╔██╗ ██║██║   ██║   ██║              ║
+    ║   ██║  ██║██║   ██║██║╚██╗██║██║   ██║   ██║              ║
+    ║   ██████╔╝╚██████╔╝██║ ╚████║╚██████╔╝   ██║              ║
+    ║   ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝    ╚═╝              ║
+    ║                                                           ║
+    ║          AI-Powered Crypto Trading Terminal               ║
+    ╚═══════════════════════════════════════════════════════════╝
+```
+
+## Features
+
+- **AI-Powered Strategy Building** - Natural language strategy creation with Claude
+- **Multi-Agent Orchestration** - Specialized agents for analysis, backtesting, and execution
+- **Session Continuity** - Resume conversations with full context via Agent SDK sessions
+- **Backtesting Integration** - Run and analyze backtests with AI-driven insights
+- **Paper Trading** - Simulate strategies with real-time or manual price data
+- **Risk Management** - Built-in risk controls with configurable limits
+- **Notification System** - Telegram, Discord, and webhook alerts
+
+## Quick Start
+
+```bash
+# Install
+git clone https://github.com/your-org/donut-cli.git
+cd donut-cli
+bun install
+
+# Configure
+cp .env.example .env
+# Add your ANTHROPIC_API_KEY to .env
+
+# Build
+bun run build
+
+# Try demo mode (no API key needed)
+donut demo tour
+
+# Start interactive mode
+donut chat
 ```
 
 ## Installation
 
+See [Installation Guide](./docs/INSTALLATION.md) for detailed setup instructions.
+
+**Requirements:**
+- Node.js 18+
+- Bun 1.0+ (or npm)
+- Anthropic API Key
+
+## Usage
+
+### Interactive Mode
+
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/donut-cli.git
-cd donut-cli
-
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Run
-npm start
+donut chat
 ```
+
+Opens a conversational interface with Claude AI for strategy development and trading operations.
+
+### Strategy Development
+
+```bash
+# Build a strategy interactively
+donut strategy build
+
+# Build with specific requirements
+donut strategy build "BTC momentum strategy with 5% stop loss"
+```
+
+### Backtesting
+
+```bash
+# Run a backtest
+donut backtest run --symbols BTCUSDT,ETHUSDT --balance 10000
+
+# Analyze results
+donut backtest analyze <runId>
+```
+
+### Paper Trading
+
+```bash
+# Start paper trading
+donut paper start --strategy my-strategy --balance 10000
+
+# Check status
+donut paper status
+
+# Compare with backtest predictions
+donut paper compare <sessionId> <backtestRunId>
+```
+
+### Demo Mode
+
+```bash
+# Interactive tour
+donut demo tour
+
+# View sample strategies
+donut demo strategies
+
+# See sample trades
+donut demo trades
+```
+
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `donut chat` | Interactive AI chat mode |
+| `donut start` | Start a new trading session |
+| `donut status` | Show session status |
+| `donut strategy build` | Build a trading strategy |
+| `donut backtest run` | Run a backtest |
+| `donut paper start` | Start paper trading |
+| `donut demo` | Demo mode tour |
+| `donut notify setup` | Configure notifications |
+
+See [CLI Reference](./docs/CLI_REFERENCE.md) for complete documentation.
+
+## Configuration
+
+Create a `.env` file:
+
+```bash
+# Required
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional backends
+HUMMINGBOT_URL=http://localhost:5000
+NOFX_API_URL=http://localhost:8080
+
+# Settings
+LOG_LEVEL=info
+SESSION_DIR=.sessions
+```
+
+See [.env.example](./.env.example) for all options.
+
+## Architecture
+
+Donut CLI uses a multi-agent architecture powered by the Claude Agent SDK:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                     ORCHESTRATOR                           │
+│               (Session Management, Routing)                │
+└─────────────────────────┬──────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+    ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐
+    │ STRATEGY  │   │ BACKTEST  │   │   RISK    │
+    │  BUILDER  │   │  ANALYST  │   │ MANAGER   │
+    └───────────┘   └───────────┘   └───────────┘
+```
+
+**Key Components:**
+- **Strategy Builder** - Designs trading strategies via conversation
+- **Backtest Analyst** - Runs and analyzes historical simulations
+- **Risk Manager** - Enforces position limits and risk controls
+
+See [spec.md](./spec.md) for the full technical specification.
 
 ## Development
 
 ```bash
-# Run directly with ts-node (no build step)
-npm run dev
+# Run in development mode
+bun run dev
+
+# Type check
+bun run lint
+
+# Run tests
+bun test
+
+# Run tests with coverage
+bun test:coverage
 ```
 
-## How It Works
+## Ralph Autonomous Agent
 
-The donut is rendered using these techniques:
+Donut CLI includes [Ralph](./ralph/README.md), an autonomous PRD-driven development agent that implements features iteratively:
 
-1. **Torus Geometry**: A circle (radius R1) is swept around an axis at distance R2
-2. **3D Rotation**: Two rotation matrices spin the torus around X and Z axes
-3. **Perspective Projection**: 3D points are projected to 2D using `x' = x*K1/z`
-4. **Z-Buffering**: Tracks depth to render only the closest surface at each pixel
-5. **Lighting**: Surface normals are dot-producted with light direction for shading
-6. **ASCII Mapping**: Luminance values map to characters: `.,-~:;=!*#$@`
+```bash
+# Run ralph to implement user stories
+./ralph/ralph.sh
+```
 
-## Key Constants
+Ralph reads from `ralph/prd.json` and implements stories one at a time, committing as it goes.
 
-| Constant | Value | Description |
-|----------|-------|-------------|
-| R1 | 1 | Tube radius |
-| R2 | 2 | Torus radius |
-| K2 | 5 | Distance from viewer |
-| θ spacing | 0.07 | Sampling around tube |
-| φ spacing | 0.02 | Sampling around torus |
+## Project Structure
 
-## Controls
+```
+donut-cli/
+├── src/
+│   ├── index.ts           # CLI entry point
+│   ├── agents/            # AI agent implementations
+│   │   ├── base-agent.ts
+│   │   ├── strategy-builder.ts
+│   │   └── backtest-analyst.ts
+│   ├── cli/               # Command modules
+│   │   └── commands/
+│   ├── core/              # Core utilities
+│   │   ├── session.ts
+│   │   ├── config.ts
+│   │   ├── errors.ts
+│   │   └── logger.ts
+│   ├── integrations/      # External services
+│   │   └── hummingbot-client.ts
+│   └── tui/               # Terminal UI
+├── docs/                  # Documentation
+├── ralph/                 # Autonomous agent
+└── spec.md               # Technical specification
+```
 
-- **Ctrl+C** - Exit the animation
-- The animation automatically adapts to terminal resize
+## Backends
+
+Donut CLI supports multiple backends:
+
+| Backend | Purpose | Required |
+|---------|---------|----------|
+| **Standalone** | Strategy design, learning | No |
+| **Hummingbot Dashboard** | Live/paper trading | Optional |
+| **nofx Server** | Backtesting | Optional |
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `bun test`
+5. Submit a pull request
 
 ## License
 
 MIT
 
-## Credits
+## Links
 
-- Original donut.c by [Andy Sloane](https://www.a1k0n.net/2011/07/20/donut-math.html)
-- TypeScript implementation by Donut CLI contributors
+- [Installation Guide](./docs/INSTALLATION.md)
+- [CLI Reference](./docs/CLI_REFERENCE.md)
+- [Technical Specification](./spec.md)
+- [Ralph Agent](./ralph/README.md)
+- [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript)
