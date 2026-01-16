@@ -62,3 +62,19 @@ Started: Thu Jan 15 21:42:30 EST 2026
   - Use originalCause instead of cause to avoid TypeScript/ES2022 conflicts
 
 ---
+
+### 2026-01-16 11:00 - DX-008 (Graceful Shutdown Handler)
+- **What was implemented**: Process-wide graceful shutdown infrastructure
+- **Files changed**:
+  - src/core/shutdown.ts (new - ShutdownManager singleton)
+  - src/index.ts (integrated shutdown handler registration)
+- **Learnings for future iterations:**
+  - Singleton pattern for process-wide shutdown coordination
+  - isShuttingDown flag prevents duplicate cleanup on rapid signals (Ctrl+C spam)
+  - Timeout race pattern ensures cleanup doesn't hang: Promise.race([cleanup, timeout])
+  - Handle uncaughtException and unhandledRejection for crash resilience
+  - Named callbacks allow unregistration and debugging ("session", "logger")
+  - Continue cleanup even if individual callbacks fail - don't let one failure stop others
+  - Export convenience functions (onShutdown, registerShutdownHandler) for ergonomics
+
+---

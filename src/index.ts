@@ -24,9 +24,24 @@ import {
   BANNER,
 } from "./cli/index.js";
 import { startInteractiveMode } from "./tui/index.js";
+import { registerShutdownHandler, onShutdown } from "./core/shutdown.js";
+import { createLogger } from "./core/logger.js";
+
+const logger = createLogger("cli");
 
 // Load environment variables
 dotenvConfig();
+
+// ============================================================================
+// Register Graceful Shutdown Handler
+// ============================================================================
+
+registerShutdownHandler({ timeout: 5000 });
+
+// Register cleanup callback for logging
+onShutdown("logger", () => {
+  logger.info("CLI shutdown complete");
+});
 
 const program = new Command();
 
