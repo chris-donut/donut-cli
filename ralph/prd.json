@@ -160,8 +160,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "CLI entry point for demo mode"
+      "passes": true,
+      "notes": "Completed - demo tour/strategies/backtest/trades/runs commands with DEMO_BANNER and indicator"
     },
     {
       "id": "US-011",

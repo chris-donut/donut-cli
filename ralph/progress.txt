@@ -115,3 +115,16 @@
 
 ---
 
+### 2026-01-15 20:25 - US-010
+- **What was implemented**: Demo mode CLI integration with interactive tour
+- **Files changed**: src/index.ts
+- **Learnings for future iterations:**
+  - Commander.js: `{ isDefault: true }` makes subcommand run when parent called with no args
+  - DEMO_BANNER pattern: Separate banner with visual [DEMO MODE] badge for clarity
+  - Tour pattern: Use `sleep()` delays between sections for dramatic effect
+  - Subcommand organization: demo tour/strategies/backtest/trades/runs mirrors real commands
+  - --demo flag: Early return pattern skips backend checks entirely
+  - Guidance: Always show next-step commands after completing demo operations
+
+---
+
