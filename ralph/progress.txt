@@ -127,3 +127,18 @@ Total commits: 4 (modularization, logging, retry, shutdown, events)
   - Include trace in AgentResult for debugging without accessing agent
 
 ---
+
+### 2026-01-16 11:30 - AG-002 (Context Compaction with Summaries)
+- **What was implemented**: Memory-efficient context management for long sessions
+- **Files changed**:
+  - src/agents/context-manager.ts (new - ContextManager class)
+  - src/agents/base-agent.ts (integrated context manager)
+- **Learnings for future iterations:**
+  - Token estimation heuristic: ~4 chars/token for English, 1.2x multiplier for code/JSON
+  - Local summarization without LLM: extract known keys (success, status, pnl, etc.) or show sample items
+  - Auto-compaction when reaching 80% of max tokens
+  - Track tool results separately from text messages for targeted compaction
+  - formatContextUsage() provides human-readable status for TUI display
+  - Clear context on session reset to prevent stale data accumulation
+
+---

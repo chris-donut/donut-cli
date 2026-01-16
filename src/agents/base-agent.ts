@@ -31,6 +31,11 @@ import {
 } from "./reasoning.js";
 import { eventBus } from "../core/events.js";
 import {
+  ContextManager,
+  ContextUsage,
+  formatContextUsage,
+} from "./context-manager.js";
+import {
   ConsoleLogger,
   createDefaultDependencies,
   DefaultMcpServerProvider,
@@ -104,6 +109,9 @@ export abstract class BaseAgent {
 
   /** ReAct-style reasoning scratchpad for transparent decision making */
   protected readonly scratchpad: ReasoningScratchpad = new ReasoningScratchpad();
+
+  /** Context manager for efficient memory usage */
+  protected readonly contextManager: ContextManager = new ContextManager();
 
   constructor(config: AgentConfig) {
     this.config = config;
@@ -367,6 +375,21 @@ export abstract class BaseAgent {
       ? message.result
       : JSON.stringify(message.result);
 
+    // Track tool result in context manager (may summarize if too large)
+    const { summarized } = this.contextManager.addToolResult(toolName, message.result);
+    if (summarized) {
+      this.logger.debug("Tool result was summarized for context efficiency", { toolName });
+    }
+
+    // Check if context needs compaction
+    if (this.contextManager.needsCompaction()) {
+      const removed = this.contextManager.compact();
+      this.logger.info("Context auto-compacted", {
+        removedMessages: removed,
+        usage: this.contextManager.getUsage(),
+      });
+    }
+
     // Record observation in reasoning scratchpad
     this.scratchpad.recordObservation(
       resultText.length > 500 ? resultText.slice(0, 500) + "..." : resultText
@@ -394,6 +417,7 @@ export abstract class BaseAgent {
   resetSession(): void {
     this.sessionId = undefined;
     this.scratchpad.reset();
+    this.contextManager.clear();
   }
 
   /**
@@ -416,6 +440,33 @@ export abstract class BaseAgent {
    */
   getCurrentReasoningStep(): ReasoningStep | undefined {
     return this.scratchpad.getCurrentStep();
+  }
+
+  /**
+   * Get context usage statistics
+   */
+  getContextUsage(): ContextUsage {
+    return this.contextManager.getUsage();
+  }
+
+  /**
+   * Get formatted context usage for display
+   */
+  getFormattedContextUsage(): string {
+    return formatContextUsage(this.contextManager.getUsage());
+  }
+
+  /**
+   * Manually trigger context compaction if needed
+   * Returns number of messages removed
+   */
+  compactContext(): number {
+    if (this.contextManager.needsCompaction()) {
+      const removed = this.contextManager.compact();
+      this.logger.info("Context compacted manually", { removedMessages: removed });
+      return removed;
+    }
+    return 0;
   }
 }
 
