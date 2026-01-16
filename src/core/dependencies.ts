@@ -202,3 +202,8 @@ export interface Dependencies {
  * Partial dependencies for optional injection
  */
 export type PartialDependencies = Partial<Dependencies>;
+
+/**
+ * Agent-specific dependencies (alias for backwards compatibility)
+ */
+export type AgentDependencies = Dependencies;

@@ -392,3 +392,38 @@ export function createSessionProvider(manager: SessionManager): SessionProvider 
 export function createEventEmitter(): EventEmitter {
   return new EventBusAdapter();
 }
+
+/**
+ * Backwards compatibility alias for DefaultRiskManager
+ */
+export const RiskManagerAdapter = DefaultRiskManager;
+
+/**
+ * Create default dependencies for an agent
+ *
+ * @param terminalConfig - Terminal configuration
+ * @param sessionManager - Session manager instance
+ * @param overrides - Optional dependency overrides
+ */
+export function createDefaultDependencies(
+  terminalConfig: { sessionDir: string },
+  sessionManager: SessionManager,
+  overrides?: Partial<{
+    logger: Logger;
+    riskManager: RiskManager;
+    mcpProvider: McpServerProvider;
+    sessionProvider: SessionProvider;
+  }>
+): {
+  logger: Logger;
+  riskManager: RiskManager;
+  mcpProvider: McpServerProvider;
+  sessionProvider: SessionProvider;
+} {
+  return {
+    logger: overrides?.logger ?? new ConsoleLogger({}, "info"),
+    riskManager: overrides?.riskManager ?? new DefaultRiskManager(),
+    mcpProvider: overrides?.mcpProvider ?? new DefaultMcpServerProvider(terminalConfig),
+    sessionProvider: overrides?.sessionProvider ?? new SessionManagerAdapter(sessionManager),
+  };
+}

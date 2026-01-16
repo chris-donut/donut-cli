@@ -7,6 +7,10 @@
 // Command registration functions
 export { registerSessionCommands } from "./commands/session.js";
 export { registerPaperTradingCommands } from "./commands/paper-trading.js";
+export { registerNotificationCommands } from "./commands/notifications.js";
+export { registerDemoCommands } from "./commands/demo.js";
+export { registerStrategyCommands } from "./commands/strategy.js";
+export { registerBacktestCommands } from "./commands/backtest.js";
 
 // Theme exports (for use in other command modules)
 export {

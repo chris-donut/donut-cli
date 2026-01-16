@@ -23,9 +23,9 @@ import {
   McpServerProvider,
   SessionProvider,
   McpServerConfig,
-  ConsoleLogger,
 } from "../core/dependencies.js";
 import {
+  ConsoleLogger,
   createDefaultDependencies,
   DefaultMcpServerProvider,
   RiskManagerAdapter,

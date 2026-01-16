@@ -13,3 +13,21 @@ Started: Thu Jan 15 21:42:30 EST 2026
   - Session commands reduced index.ts from 1350 to 1185 lines (~12% reduction)
 
 ---
+
+### 2026-01-15 22:30 - DX-002/003/004/005 (CLI Modularization Complete)
+- **What was implemented**: Full CLI command modularization
+- **Files changed**:
+  - src/index.ts (reduced from 783 to 67 lines - 91% reduction!)
+  - src/cli/index.ts (added exports for all command modules)
+  - src/core/dependencies.ts (added AgentDependencies type alias)
+  - src/core/providers.ts (added createDefaultDependencies, RiskManagerAdapter)
+  - src/agents/base-agent.ts (fixed broken imports)
+- **Learnings for future iterations:**
+  - Command modules already existed but weren't integrated - always check existing files first
+  - The composition root pattern (src/cli/index.ts) cleanly separates concerns
+  - Pre-existing import bugs can be hidden until code paths are exercised
+  - Factory functions (createDefaultDependencies) make DI manageable
+  - Type aliases (AgentDependencies = Dependencies) maintain backwards compatibility
+  - Main entry point now just: imports + register calls + program.parse()
+
+---

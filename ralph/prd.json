@@ -33,8 +33,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Paper trading commands extracted to src/cli/commands/paper-trading.ts with registerPaperTradingCommands function"
     },
     {
       "id": "DX-003",
@@ -49,8 +49,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Notification commands extracted to src/cli/commands/notifications.ts with registerNotificationCommands function"
     },
     {
       "id": "DX-004",
@@ -65,8 +65,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Demo commands extracted to src/cli/commands/demo.ts with registerDemoCommands function"
     },
     {
       "id": "DX-005",
@@ -81,8 +81,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Strategy and backtest commands extracted. Main index.ts reduced from 783 to 67 lines (under 200 target). Fixed broken imports in base-agent.ts, added missing exports to providers.ts and dependencies.ts"
     },
     {
       "id": "DX-006",
