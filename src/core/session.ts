@@ -5,6 +5,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
+import { z } from "zod";
 import {
   SessionState,
   WorkflowStage,
@@ -18,6 +19,75 @@ import {
   TradeResult,
   Position,
 } from "./types.js";
+
+// ============================================================================
+// Security: Session ID Validation
+// ============================================================================
+
+/**
+ * Valid session ID pattern: alphanumeric, underscores, hyphens only
+ * Prevents path traversal attacks
+ */
+const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Validate session ID format to prevent path traversal
+ * @throws Error if session ID contains invalid characters
+ */
+function validateSessionId(sessionId: string): void {
+  if (!SESSION_ID_PATTERN.test(sessionId)) {
+    throw new Error(
+      `Invalid session ID format: "${sessionId}". ` +
+      `Session IDs must contain only alphanumeric characters, underscores, and hyphens.`
+    );
+  }
+
+  // Additional check: no directory traversal patterns
+  if (sessionId.includes("..") || sessionId.includes("/") || sessionId.includes("\\")) {
+    throw new Error(`Path traversal attempt detected in session ID: "${sessionId}"`);
+  }
+}
+
+// ============================================================================
+// Security: Session State Schema Validation
+// ============================================================================
+
+/**
+ * Schema for validating loaded session data
+ * Prevents insecure deserialization attacks
+ */
+const SessionStateSchema = z.object({
+  sessionId: z.string(),
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+  currentStage: z.nativeEnum(WorkflowStage),
+  stageHistory: z.array(z.object({
+    fromStage: z.nativeEnum(WorkflowStage),
+    toStage: z.nativeEnum(WorkflowStage),
+    timestamp: z.string().or(z.date()),
+    reason: z.string(),
+    triggeredBy: z.enum(["user", "agent", "system"]),
+  })),
+  agentSessionIds: z.record(z.string()).default({}),
+  pendingTrades: z.array(z.unknown()).default([]),
+  executedTrades: z.array(z.unknown()).default([]),
+  currentPositions: z.array(z.unknown()).default([]),
+  pendingApprovals: z.array(z.object({
+    requestId: z.string(),
+    status: z.enum(["pending", "approved", "rejected"]),
+    requestedAt: z.string().or(z.date()),
+    respondedAt: z.string().or(z.date()).optional(),
+    reason: z.string().optional(),
+    type: z.string().optional(),
+    context: z.unknown().optional(),
+  })).default([]),
+  discoveryInsights: z.array(z.string()).default([]),
+  analysisResults: z.array(z.string()).default([]),
+  activeStrategy: z.unknown().optional(),
+  strategyDraft: z.unknown().optional(),
+  activeBacktestRunId: z.string().optional(),
+  backtestResults: z.unknown().optional(),
+});
 
 /**
  * Generate a unique session ID
@@ -73,27 +143,57 @@ export class SessionManager {
 
   /**
    * Load an existing session
+   * @throws Error if session ID is invalid, file not found, or data fails validation
    */
   async loadSession(sessionId: string): Promise<void> {
+    // Security: Validate session ID format to prevent path traversal
+    validateSessionId(sessionId);
+
     const filePath = this.getSessionPath(sessionId);
     try {
       const data = await fs.readFile(filePath, "utf-8");
-      const parsed = JSON.parse(data);
+      const rawParsed = JSON.parse(data);
+
+      // Security: Validate parsed data against schema to prevent insecure deserialization
+      const validationResult = SessionStateSchema.safeParse(rawParsed);
+      if (!validationResult.success) {
+        const issues = validationResult.error.issues
+          .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+          .join("\n");
+        throw new Error(
+          `Session data validation failed for ${sessionId}:\n${issues}`
+        );
+      }
+
+      const parsed = validationResult.data;
 
       // Convert date strings back to Date objects
       this.state = {
         ...parsed,
         createdAt: new Date(parsed.createdAt),
         updatedAt: new Date(parsed.updatedAt),
-        stageHistory: parsed.stageHistory.map((t: StageTransition & { timestamp: string }) => ({
+        stageHistory: parsed.stageHistory.map((t) => ({
           ...t,
           timestamp: new Date(t.timestamp),
         })),
-        pendingApprovals: parsed.pendingApprovals.map((a: ApprovalRequest & { requestedAt: string; respondedAt?: string }) => ({
+        pendingApprovals: parsed.pendingApprovals.map((a) => ({
           ...a,
+          type: (a.type || "trade") as "trade" | "strategy" | "backtest",
+          payload: a.context ?? null,
           requestedAt: new Date(a.requestedAt),
           respondedAt: a.respondedAt ? new Date(a.respondedAt) : undefined,
-        })),
+        })) as ApprovalRequest[],
+        // Preserve arrays with safe defaults
+        pendingTrades: (parsed.pendingTrades || []) as TradeOrder[],
+        executedTrades: (parsed.executedTrades || []) as TradeResult[],
+        currentPositions: (parsed.currentPositions || []) as Position[],
+        discoveryInsights: parsed.discoveryInsights || [],
+        analysisResults: parsed.analysisResults || [],
+        agentSessionIds: (parsed.agentSessionIds || {}) as Record<AgentType, string>,
+        activeStrategy: parsed.activeStrategy as StrategyConfig | undefined,
+        strategyDraft: parsed.strategyDraft as Partial<StrategyConfig> | undefined,
+        activeBacktestRunId: parsed.activeBacktestRunId,
+        backtestResults: parsed.backtestResults as BacktestMetrics | undefined,
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -348,23 +448,55 @@ export class SessionManager {
 
   /**
    * Delete a session
+   * @throws Error if session ID is invalid or contains path traversal
    */
   async deleteSession(sessionId: string): Promise<void> {
+    // Security: Validate session ID format
+    validateSessionId(sessionId);
+
     const filePath = this.getSessionPath(sessionId);
     await fs.unlink(filePath);
   }
 
   // Private helpers
 
+  /**
+   * Get the file path for a session
+   * Includes security validation to prevent path traversal
+   */
   private getSessionPath(sessionId: string): string {
-    return path.join(this.sessionDir, `${sessionId}.json`);
+    // Note: validateSessionId should be called before this method
+    // but we add a defense-in-depth check here
+    const resolvedSessionDir = path.resolve(this.sessionDir);
+    const filePath = path.resolve(resolvedSessionDir, `${sessionId}.json`);
+
+    // Security: Ensure resolved path is within session directory
+    if (!filePath.startsWith(resolvedSessionDir + path.sep)) {
+      throw new Error(
+        `Security violation: Path traversal detected. ` +
+        `Session file path "${filePath}" is outside session directory "${resolvedSessionDir}"`
+      );
+    }
+
+    return filePath;
   }
 
+  /**
+   * Ensure session directory exists
+   * Properly handles errors instead of silently swallowing them
+   */
   private async ensureSessionDir(): Promise<void> {
     try {
       await fs.mkdir(this.sessionDir, { recursive: true });
     } catch (error) {
-      // Directory already exists, ignore
+      const nodeError = error as NodeJS.ErrnoException;
+      // Only ignore EEXIST errors (directory already exists)
+      // Other errors (permission denied, disk full, etc.) should propagate
+      if (nodeError.code !== "EEXIST") {
+        throw new Error(
+          `Failed to create session directory "${this.sessionDir}": ${nodeError.message}`
+        );
+      }
     }
   }
 }
