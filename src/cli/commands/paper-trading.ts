@@ -9,6 +9,10 @@ import chalk from "chalk";
 import ora from "ora";
 
 import { loadConfig } from "../../core/config.js";
+import { createLogger } from "../../core/logger.js";
+
+// Structured logger for paper trading operations
+const logger = createLogger("paper-trading");
 import {
   createPaperSession,
   listPaperSessions,
@@ -64,6 +68,13 @@ export function registerPaperTradingCommands(program: Command): void {
         }
 
         const session = await createPaperSession(options.strategy, initialBalance, liveMode);
+
+        logger.info("Paper trading session created", {
+          sessionId: session.id,
+          strategy: options.strategy,
+          balance: initialBalance,
+          liveMode,
+        });
 
         spinner.succeed(`Paper trading session created`);
         console.log(chalk.gray("─".repeat(50)));
@@ -232,6 +243,14 @@ export function registerPaperTradingCommands(program: Command): void {
 
         if (stopped) {
           const returnPct = ((stopped.balance - stopped.initialBalance) / stopped.initialBalance) * 100;
+
+          logger.info("Paper trading session stopped", {
+            sessionId: session.id,
+            finalBalance: stopped.balance,
+            initialBalance: stopped.initialBalance,
+            returnPct,
+            tradeCount: stopped.trades.length,
+          });
 
           spinner.succeed("Paper trading session stopped");
           console.log(chalk.gray("─".repeat(50)));

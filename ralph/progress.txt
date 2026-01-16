@@ -31,3 +31,18 @@ Started: Thu Jan 15 21:42:30 EST 2026
   - Main entry point now just: imports + register calls + program.parse()
 
 ---
+
+### 2026-01-15 22:40 - DX-006 (Structured Logging with Pino)
+- **What was implemented**: Pino-based structured logging system
+- **Files changed**:
+  - package.json (added pino, pino-pretty dependencies)
+  - src/core/logger.ts (refactored to use Pino backend)
+  - src/cli/commands/paper-trading.ts (added structured logging)
+- **Learnings for future iterations:**
+  - Existing logger.ts had good API - just swap the backend to Pino
+  - Pino child loggers bind context (component) to all subsequent logs
+  - pino-pretty transport for dev, JSON for production (NODE_ENV=production)
+  - Keep console.log for user-facing CLI output, use logger for operations
+  - LOG_LEVEL, LOG_FORMAT env vars control behavior
+
+---

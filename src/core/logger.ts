@@ -1,13 +1,15 @@
 /**
- * Structured Logging System for donut-cli
+ * Structured Logging System with Pino
  *
- * Provides consistent, filterable logging with:
- * - Log levels (debug, info, warn, error)
- * - Component tagging for easy filtering
- * - Structured JSON output for production
+ * Provides production-ready logging with:
+ * - Fast JSON output via Pino for log aggregation
+ * - LOG_LEVEL environment variable support
+ * - Component tagging for filtering
  * - Pretty console output for development
- * - Configurable via environment variables
+ * - Child loggers for scoped context
  */
+
+import pino, { Logger as PinoLogger, LoggerOptions } from "pino";
 
 // ============================================================================
 // Types
@@ -61,16 +63,13 @@ const LOG_LEVEL_NAMES: Record<LogLevel, string> = {
   [LogLevel.SILENT]: "SILENT",
 };
 
-const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
-  [LogLevel.DEBUG]: "\x1b[36m", // Cyan
-  [LogLevel.INFO]: "\x1b[32m",  // Green
-  [LogLevel.WARN]: "\x1b[33m",  // Yellow
-  [LogLevel.ERROR]: "\x1b[31m", // Red
-  [LogLevel.SILENT]: "",
+const PINO_LEVEL_MAP: Record<LogLevel, string> = {
+  [LogLevel.DEBUG]: "debug",
+  [LogLevel.INFO]: "info",
+  [LogLevel.WARN]: "warn",
+  [LogLevel.ERROR]: "error",
+  [LogLevel.SILENT]: "silent",
 };
-
-const RESET_COLOR = "\x1b[0m";
-const DIM_COLOR = "\x1b[2m";
 
 /**
  * Get default configuration from environment
@@ -81,7 +80,7 @@ function getDefaultConfig(): LoggerConfig {
 
   return {
     level,
-    jsonOutput: process.env.LOG_FORMAT === "json",
+    jsonOutput: process.env.LOG_FORMAT === "json" || process.env.NODE_ENV === "production",
     includeTimestamp: process.env.LOG_TIMESTAMPS !== "false",
     includeStack: process.env.LOG_STACK !== "false",
   };
@@ -109,173 +108,122 @@ export function setLogLevel(level: LogLevel | string): void {
 }
 
 // ============================================================================
+// Pino Configuration
+// ============================================================================
+
+function createPinoOptions(config: LoggerConfig): LoggerOptions {
+  const pinoLevel = PINO_LEVEL_MAP[config.level];
+
+  if (!config.jsonOutput) {
+    // Pretty output for development
+    return {
+      level: pinoLevel,
+      transport: {
+        target: "pino-pretty",
+        options: {
+          colorize: true,
+          translateTime: "SYS:HH:MM:ss",
+          ignore: "pid,hostname",
+        },
+      },
+    };
+  }
+
+  // JSON output for production
+  return {
+    level: pinoLevel,
+    formatters: {
+      level: (label) => ({ level: label }),
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+  };
+}
+
+// ============================================================================
 // Logger Class
 // ============================================================================
 
 /**
- * Structured logger with component tagging
+ * Structured logger with Pino backend
  *
  * @example
  * ```typescript
  * const logger = new Logger("OrchestratorAgent");
  * logger.info("Starting orchestration", { taskCount: 5 });
  * logger.error("Failed to execute", error, { context: "some-context" });
+ *
+ * // Create child logger
+ * const childLogger = logger.child("subtask");
+ * childLogger.debug("Processing item", { itemId: 123 });
  * ```
  */
 export class Logger {
   private component: string;
   private config: LoggerConfig;
+  private pino: PinoLogger;
 
   constructor(component: string, config?: Partial<LoggerConfig>) {
     this.component = component;
     this.config = { ...globalConfig, ...config };
+    this.pino = pino(createPinoOptions(this.config)).child({ component });
   }
 
   /**
    * Log debug message (for development/troubleshooting)
    */
   debug(message: string, meta?: Record<string, unknown>): void {
-    this.log(LogLevel.DEBUG, message, undefined, meta);
+    if (meta) {
+      this.pino.debug(meta, message);
+    } else {
+      this.pino.debug(message);
+    }
   }
 
   /**
    * Log info message (normal operations)
    */
   info(message: string, meta?: Record<string, unknown>): void {
-    this.log(LogLevel.INFO, message, undefined, meta);
+    if (meta) {
+      this.pino.info(meta, message);
+    } else {
+      this.pino.info(message);
+    }
   }
 
   /**
    * Log warning message (potential issues)
    */
   warn(message: string, meta?: Record<string, unknown>): void {
-    this.log(LogLevel.WARN, message, undefined, meta);
+    if (meta) {
+      this.pino.warn(meta, message);
+    } else {
+      this.pino.warn(message);
+    }
   }
 
   /**
    * Log error message
    */
   error(message: string, error?: Error | unknown, meta?: Record<string, unknown>): void {
-    this.log(LogLevel.ERROR, message, error, meta);
+    const errorMeta = error instanceof Error
+      ? { ...meta, err: { message: error.message, stack: this.config.includeStack ? error.stack : undefined } }
+      : error
+        ? { ...meta, err: String(error) }
+        : meta;
+
+    if (errorMeta) {
+      this.pino.error(errorMeta, message);
+    } else {
+      this.pino.error(message);
+    }
   }
 
   /**
    * Create a child logger with additional context
    */
   child(subComponent: string): Logger {
-    return new Logger(`${this.component}:${subComponent}`, this.config);
-  }
-
-  /**
-   * Internal logging method
-   */
-  private log(
-    level: LogLevel,
-    message: string,
-    error?: Error | unknown,
-    meta?: Record<string, unknown>
-  ): void {
-    // Check if level should be logged
-    if (level < this.config.level) {
-      return;
-    }
-
-    const entry: LogEntry = {
-      timestamp: new Date().toISOString(),
-      level: LOG_LEVEL_NAMES[level],
-      component: this.component,
-      message,
-    };
-
-    if (meta && Object.keys(meta).length > 0) {
-      entry.meta = meta;
-    }
-
-    if (error) {
-      if (error instanceof Error) {
-        entry.error = {
-          name: error.name,
-          message: error.message,
-          stack: this.config.includeStack ? error.stack : undefined,
-        };
-      } else {
-        entry.error = {
-          name: "UnknownError",
-          message: String(error),
-        };
-      }
-    }
-
-    this.output(level, entry);
-  }
-
-  /**
-   * Output the log entry
-   */
-  private output(level: LogLevel, entry: LogEntry): void {
-    if (this.config.jsonOutput) {
-      this.outputJson(level, entry);
-    } else {
-      this.outputPretty(level, entry);
-    }
-  }
-
-  /**
-   * Output as JSON (for production/log aggregation)
-   */
-  private outputJson(level: LogLevel, entry: LogEntry): void {
-    const output = JSON.stringify(entry);
-
-    if (level >= LogLevel.ERROR) {
-      console.error(output);
-    } else if (level >= LogLevel.WARN) {
-      console.warn(output);
-    } else {
-      console.log(output);
-    }
-  }
-
-  /**
-   * Output as pretty-printed console message
-   */
-  private outputPretty(level: LogLevel, entry: LogEntry): void {
-    const color = LOG_LEVEL_COLORS[level];
-    const levelName = LOG_LEVEL_NAMES[level].padEnd(5);
-
-    let output = "";
-
-    // Timestamp
-    if (this.config.includeTimestamp) {
-      const time = entry.timestamp.split("T")[1].slice(0, 8);
-      output += `${DIM_COLOR}${time}${RESET_COLOR} `;
-    }
-
-    // Level and component
-    output += `${color}${levelName}${RESET_COLOR} `;
-    output += `${DIM_COLOR}[${this.component}]${RESET_COLOR} `;
-
-    // Message
-    output += entry.message;
-
-    // Meta
-    if (entry.meta) {
-      const metaStr = Object.entries(entry.meta)
-        .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-        .join(" ");
-      output += ` ${DIM_COLOR}${metaStr}${RESET_COLOR}`;
-    }
-
-    // Output
-    if (level >= LogLevel.ERROR) {
-      console.error(output);
-      if (entry.error?.stack && this.config.includeStack) {
-        console.error(DIM_COLOR + entry.error.stack + RESET_COLOR);
-      }
-    } else if (level >= LogLevel.WARN) {
-      console.warn(output);
-    } else {
-      console.log(output);
-    }
+    const childLogger = new Logger(`${this.component}:${subComponent}`, this.config);
+    return childLogger;
   }
 }
 
