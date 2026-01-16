@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1138 | 8:34 PM | 🔵 | Nofx MCP Server: Backtest Tool Integration for Claude Agent SDK | ~1352 |
 | #947 | 1:08 PM | 🔵 | nofx MCP Server Tool Definitions and Architecture | ~614 |
 </claude-mem-context>

@@ -6,6 +6,7 @@
 
 // Command registration functions
 export { registerSessionCommands } from "./commands/session.js";
+export { registerPaperTradingCommands } from "./commands/paper-trading.js";
 
 // Theme exports (for use in other command modules)
 export {

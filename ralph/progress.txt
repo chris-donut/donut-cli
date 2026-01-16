@@ -184,3 +184,15 @@ Thread: https://ampcode.com/threads/T-019bc49f-1010-7729-909c-d8d33dfd81ae
   - Tool return pattern: always return `{ success, ... }` for consistent handling
 
 ---
+
+### 2026-01-15 22:15 - DX-001 (Dexter Phase 1)
+- **What was implemented**: CLI Command Module Structure
+- **Files changed**: src/cli/index.ts (new), src/index.ts
+- **Learnings for future iterations:**
+  - Modular CLI pattern: Create `registerXCommands(program: Command)` functions
+  - Shared theme: Move BANNER, DEMO_BANNER, colors to src/cli/theme.ts
+  - Import pattern: src/cli/index.ts re-exports all command registration functions
+  - Keep original command logic intact when extracting to modules
+  - Session commands reduced index.ts from 1350 to 1185 lines (~12% reduction)
+
+---
