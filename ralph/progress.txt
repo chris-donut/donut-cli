@@ -46,3 +46,19 @@ Started: Thu Jan 15 21:42:30 EST 2026
   - LOG_LEVEL, LOG_FORMAT env vars control behavior
 
 ---
+
+### 2026-01-16 10:55 - DX-007 (Retry Logic with Exponential Backoff)
+- **What was implemented**: Robust retry utility with exponential backoff
+- **Files changed**:
+  - src/utils/retry.ts (new - full retry implementation)
+  - src/integrations/hummingbot-client.ts (applied retry to getCurrentPrice)
+- **Learnings for future iterations:**
+  - Separate retry utility from error classes - single responsibility principle
+  - RetryableError with retryAfter allows servers to specify exact backoff time (e.g., 429 rate limits)
+  - defaultShouldRetry checks error messages for network keywords + isRetriable flag
+  - Jitter (±25%) prevents thundering herd when multiple clients retry simultaneously
+  - onRetry callback enables observability without coupling to logging implementation
+  - Wrap async calls in arrow functions to preserve `this` context: `() => this.method()`
+  - Use originalCause instead of cause to avoid TypeScript/ES2022 conflicts
+
+---

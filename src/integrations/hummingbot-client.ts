@@ -12,6 +12,8 @@ import {
   EquityPoint,
   TradeEvent,
 } from "../core/types.js";
+import { withRetry } from "../utils/retry.js";
+import { createLogger } from "../core/logger.js";
 
 export interface HummingbotClientConfig {
   baseUrl: string;
@@ -55,6 +57,8 @@ export interface CandleData {
   close: number;
   volume: number;
 }
+
+const logger = createLogger("hummingbot-client");
 
 /**
  * HTTP client for Hummingbot Dashboard API
@@ -320,10 +324,25 @@ export class HummingbotClient {
   /**
    * Get current price for a single symbol
    * Convenience method that fetches the most recent candle close price
+   * Uses retry logic for transient network failures
    */
   async getCurrentPrice(symbol: string): Promise<{ price: number; timestamp: number } | null> {
     try {
-      const candles = await this.getCandles(symbol, "1m", 1);
+      const candles = await withRetry(
+        () => this.getCandles(symbol, "1m", 1),
+        {
+          maxRetries: 3,
+          baseDelay: 1000,
+          onRetry: (error, attempt, delay) => {
+            logger.debug("Retrying getCurrentPrice", {
+              symbol,
+              attempt,
+              delayMs: delay,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        }
+      );
       if (candles.length > 0) {
         return {
           price: candles[0].close,
@@ -331,7 +350,11 @@ export class HummingbotClient {
         };
       }
       return null;
-    } catch {
+    } catch (error) {
+      logger.warn("Failed to get current price after retries", {
+        symbol,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }
