@@ -23,6 +23,7 @@ import {
   registerBacktestCommands,
   BANNER,
 } from "./cli/index.js";
+import { startInteractiveMode } from "./tui/index.js";
 
 // Load environment variables
 dotenvConfig();
@@ -51,13 +52,20 @@ registerDemoCommands(program);
 
 program
   .command("chat")
-  .description("Start interactive chat mode")
+  .description("Start interactive chat mode with Claude AI")
   .action(async () => {
     console.log(BANNER);
-    console.log(chalk.gray("Interactive mode coming soon..."));
-    console.log(chalk.gray("For now, use individual commands like:"));
-    console.log(`  ${chalk.cyan("donut strategy build")} "Build a momentum strategy for BTC"`);
-    console.log(`  ${chalk.cyan("donut backtest run")} --symbols BTCUSDT,ETHUSDT`);
+    try {
+      await startInteractiveMode();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("ANTHROPIC_API_KEY")) {
+        console.error(chalk.red("\nError: ANTHROPIC_API_KEY not set"));
+        console.log(chalk.gray("Set your API key: export ANTHROPIC_API_KEY=sk-ant-..."));
+      } else {
+        console.error(chalk.red("\nError starting interactive mode:"), error);
+      }
+      process.exit(1);
+    }
   });
 
 // ============================================================================
