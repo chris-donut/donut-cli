@@ -1,52 +1,51 @@
 {
-  "project": "Donut CLI - Phase 2 Completion + Phase 3 Intelligence Layer",
-  "branchName": "ralph/phase2-phase3-intelligence",
-  "description": "Complete Phase 2 Multi-Agent Foundation (risk hook wiring, PostgreSQL MCP) and implement Phase 3 Intelligence Layer (regime detection, performance attribution, confidence calibration, trade journal).",
+  "project": "Donut CLI - Dexter-Inspired Phase 1 Foundation",
+  "branchName": "ralph/dexter-phase1-foundation",
+  "description": "Foundation improvements inspired by Dexter agent architecture: modularize CLI, add structured logging, retry logic, and graceful shutdown for production readiness.",
   "userStories": [
     {
-      "id": "US-013",
-      "title": "Wire RiskManager into BaseAgent Tool Execution",
-      "description": "As a trader, I want risk checks to run automatically before trade execution so that position limits are enforced",
+      "id": "DX-001",
+      "title": "Create CLI Command Module Structure",
+      "description": "As a developer, I want CLI commands organized into modules so that the codebase is maintainable",
       "acceptanceCriteria": [
-        "Import RiskManager in base-agent.ts",
-        "Add preToolUse hook call in processMessage() before tool execution",
-        "Block high-risk tools if RiskManager returns { allowed: false }",
-        "Log blocked trades with reason to console",
-        "Add postToolUse hook call after successful tool execution",
+        "Create src/cli/ directory with index.ts entry point",
+        "Create src/cli/commands/ directory for command modules",
+        "Move session commands (start, resume, status) to src/cli/commands/session.ts",
+        "Export registerSessionCommands(program) function",
+        "Main index.ts imports and calls register functions",
+        "All existing session commands work identically",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Completed - getRiskManager() integrated with preToolUseHook/postToolUseHook, blockedTools set tracking"
+      "notes": "Session commands extracted to src/cli/commands/session.ts, theme.ts created, index.ts reduced from 1350 to 1185 lines"
     },
     {
-      "id": "US-014",
-      "title": "Create PostgreSQL MCP Server for Decision Persistence",
-      "description": "As a developer, I want a PostgreSQL MCP server so that agent decisions and state can be persisted",
+      "id": "DX-002",
+      "title": "Extract Paper Trading Commands to Module",
+      "description": "As a developer, I want paper trading commands in a separate module for better organization",
       "acceptanceCriteria": [
-        "Create src/mcp-servers/postgres-server.ts",
-        "Add pg and @types/pg dependencies",
-        "Implement decision_log tool to insert decision records",
-        "Implement decision_query tool to retrieve past decisions",
-        "Implement state_save and state_load tools for agent state",
-        "Read DATABASE_URL from environment",
-        "Fall back gracefully if database unavailable",
+        "Create src/cli/commands/paper-trading.ts",
+        "Move all 'paper' subcommands (start, status, trades, stop, list, compare)",
+        "Export registerPaperTradingCommands(program) function",
+        "Import paperTradingManager and hummingbotClient as needed",
+        "All paper trading commands work identically",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Completed - pg pool with graceful fallback, decision_log/decision_query/state_save/state_load tools"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-015",
-      "title": "Create Market Regime Detector Agent",
-      "description": "As a trader, I want automatic market regime detection so that strategies adapt to conditions",
+      "id": "DX-003",
+      "title": "Extract Notification Commands to Module",
+      "description": "As a developer, I want notification commands in a separate module",
       "acceptanceCriteria": [
-        "Create src/agents/regime-detector.ts",
-        "Implement detectRegime(symbol) returning bull/bear/range/volatile",
-        "Use moving average slopes and volatility indicators",
-        "Add confidence score 0-1 for regime classification",
-        "Cache regime for 1 hour to avoid excessive recalculation",
+        "Create src/cli/commands/notifications.ts",
+        "Move all 'notify' subcommands (setup, test, status)",
+        "Export registerNotificationCommands(program) function",
+        "Handle config file operations within the module",
+        "All notification commands work identically",
         "Typecheck passes"
       ],
       "priority": 3,
@@ -54,15 +53,15 @@
       "notes": ""
     },
     {
-      "id": "US-016",
-      "title": "Create Performance Attribution System",
-      "description": "As a trader, I want to understand why strategies win or lose",
+      "id": "DX-004",
+      "title": "Extract Demo Commands to Module",
+      "description": "As a developer, I want demo commands in a separate module",
       "acceptanceCriteria": [
-        "Create src/analytics/attribution.ts",
-        "Implement attributeByRegime() grouping PnL by market regime",
-        "Implement attributeByTimeOfDay() grouping PnL by hour",
-        "Implement attributeBySymbol() grouping PnL by asset",
-        "Return ranked list of factors with contribution percentage",
+        "Create src/cli/commands/demo.ts",
+        "Move all 'demo' subcommands (tour, strategies, backtest, trades, runs)",
+        "Export registerDemoCommands(program) function",
+        "Import demo mode generators as needed",
+        "All demo commands work identically",
         "Typecheck passes"
       ],
       "priority": 4,
@@ -70,16 +69,15 @@
       "notes": ""
     },
     {
-      "id": "US-017",
-      "title": "Create Confidence Calibration Tracker",
-      "description": "As a trader, I want to track prediction accuracy to calibrate confidence",
+      "id": "DX-005",
+      "title": "Extract Strategy and Backtest Commands to Modules",
+      "description": "As a developer, I want strategy and backtest commands in separate modules",
       "acceptanceCriteria": [
-        "Create src/analytics/calibration.ts",
-        "Track predictions with confidence scores",
-        "Compare predictions to actual outcomes",
-        "Calculate calibration curve (predicted vs actual)",
-        "Report over/under confidence bias",
-        "Persist calibration data to .sessions/calibration.json",
+        "Create src/cli/commands/strategy.ts with build command",
+        "Create src/cli/commands/backtest.ts with run, status, analyze commands",
+        "Export registerStrategyCommands and registerBacktestCommands functions",
+        "Update main index.ts to be under 200 lines",
+        "All commands work identically",
         "Typecheck passes"
       ],
       "priority": 5,
@@ -87,18 +85,87 @@
       "notes": ""
     },
     {
-      "id": "US-018",
-      "title": "Create Trade Journal MCP Server",
-      "description": "As a trader, I want a trade journal so that I can review decision rationale",
+      "id": "DX-006",
+      "title": "Add Structured Logging with Pino",
+      "description": "As a developer, I want structured logging so that I can debug issues in production",
       "acceptanceCriteria": [
-        "Create src/mcp-servers/journal-server.ts",
-        "Implement journal_entry tool to log trade decisions with rationale",
-        "Implement journal_search tool to find entries by date/symbol/tag",
-        "Implement journal_summary tool to generate period summaries",
-        "Store entries in .sessions/journal/ as markdown files",
+        "Add pino and pino-pretty as dependencies",
+        "Create src/core/logger.ts with configured Pino logger",
+        "Support LOG_LEVEL environment variable (debug, info, warn, error)",
+        "Export logger instance and convenience functions (info, debug, error, warn)",
+        "Add child logger creation for component-specific logging",
+        "Replace console.log in one module (paper-trading.ts) with logger calls",
         "Typecheck passes"
       ],
       "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DX-007",
+      "title": "Implement Retry Logic with Exponential Backoff",
+      "description": "As a trader, I want API calls to retry on failure so that transient errors don't stop execution",
+      "acceptanceCriteria": [
+        "Create src/utils/retry.ts with withRetry<T> function",
+        "Support configurable maxRetries (default 3), baseDelay (default 1000ms)",
+        "Implement exponential backoff: delay * 2^attempt",
+        "Add optional shouldRetry predicate for custom retry logic",
+        "Add RetryableError class for explicit retry requests",
+        "Apply retry logic to HummingbotClient.getCurrentPrice()",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DX-008",
+      "title": "Add Graceful Shutdown Handler",
+      "description": "As a developer, I want graceful shutdown so that sessions are saved on exit",
+      "acceptanceCriteria": [
+        "Create src/core/shutdown.ts with registerShutdownHandler function",
+        "Handle SIGINT and SIGTERM signals",
+        "Save any pending session state before exit",
+        "Log shutdown initiation and completion",
+        "Support async cleanup callbacks",
+        "Register handler in main CLI entry point",
+        "Ctrl+C during operation saves state before exiting",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DX-009",
+      "title": "Add Custom Error Classes with Context",
+      "description": "As a developer, I want rich error context so that I can debug issues effectively",
+      "acceptanceCriteria": [
+        "Create src/core/errors.ts with DonutError base class",
+        "Include error code, context object, and cause chain",
+        "Create specific errors: NetworkError, ConfigError, ValidationError",
+        "Add toJSON() method for structured logging",
+        "Replace one error throw in hummingbot-client.ts with DonutError",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Already implemented - DonutError, ConfigError, ApiError, ValidationError, SessionError, AgentError, RiskError, NotImplementedError all exist with formatError, logError, withRetry utilities"
+    },
+    {
+      "id": "DX-010",
+      "title": "Add Tool Event System Foundation",
+      "description": "As a developer, I want tool execution events so that the TUI can show real-time progress",
+      "acceptanceCriteria": [
+        "Create src/core/events.ts with EventBus class",
+        "Define ToolEvent union type (tool:start, tool:end, tool:error)",
+        "Support typed event subscription with on<T>(type, handler)",
+        "Support one-time listeners with once<T>(type, handler)",
+        "Add global eventBus singleton export",
+        "Emit tool:start event from one MCP server tool call",
+        "Typecheck passes"
+      ],
+      "priority": 10,
       "passes": false,
       "notes": ""
     }

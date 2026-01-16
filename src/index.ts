@@ -19,6 +19,7 @@ import { loadConfig, validateApiKeys } from "./core/config.js";
 import { SessionManager } from "./core/session.js";
 import { createStrategyBuilder } from "./agents/strategy-builder.js";
 import { createBacktestAnalyst } from "./agents/backtest-analyst.js";
+import { registerSessionCommands, BANNER, DEMO_BANNER, DEMO_INDICATOR } from "./cli/index.js";
 import {
   createPaperSession,
   getPaperSession,
@@ -47,28 +48,6 @@ import os from "os";
 // Load environment variables
 dotenvConfig();
 
-const BANNER = `
-${chalk.hex("#FF6B35")("╔═══════════════════════════════════════════════════════════════╗")}
-${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}   ${chalk.bold.white("🍩 Donut CLI")} - ${chalk.gray("Unified Trading Terminal")}                    ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}   ${chalk.cyan("Strategy Building")} · ${chalk.green("Backtesting")} · ${chalk.yellow("AI Analysis")} · ${chalk.magenta("Execution")}   ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("╚═══════════════════════════════════════════════════════════════╝")}
-`;
-
-const DEMO_BANNER = `
-${chalk.hex("#FF6B35")("╔═══════════════════════════════════════════════════════════════╗")}
-${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}   ${chalk.bold.white("🍩 Donut CLI")} - ${chalk.bgYellow.black(" DEMO MODE ")}                              ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}   ${chalk.yellow("All data is simulated - no backends required")}                ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
-${chalk.hex("#FF6B35")("╚═══════════════════════════════════════════════════════════════╝")}
-`;
-
-const DEMO_INDICATOR = chalk.bgYellow.black(" DEMO MODE ");
-
 const program = new Command();
 
 program
@@ -77,152 +56,9 @@ program
   .version("0.1.0");
 
 // ============================================================================
-// Session Commands
+// Session Commands (modularized)
 // ============================================================================
-
-program
-  .command("start")
-  .description("Start a new trading session")
-  .option("-g, --goal <goal>", "Your trading goal or strategy idea")
-  .option("-d, --demo", "Run in demo mode (no backend required)")
-  .action(async (options) => {
-    // Demo mode uses simulated data
-    if (options.demo) {
-      console.log(DEMO_BANNER);
-      console.log(chalk.yellow(`${DEMO_INDICATOR} Starting in demo mode - all data is simulated\n`));
-      console.log(chalk.gray("Demo mode commands:"));
-      console.log(`  ${chalk.cyan("donut demo")} - Run interactive demo tour`);
-      console.log(`  ${chalk.cyan("donut demo strategies")} - View demo strategies`);
-      console.log(`  ${chalk.cyan("donut demo backtest")} - See demo backtest results`);
-      console.log(`  ${chalk.cyan("donut demo trades")} - View sample trades`);
-      return;
-    }
-
-    console.log(BANNER);
-
-    const spinner = ora("Initializing...").start();
-
-    try {
-      const config = loadConfig();
-      validateApiKeys(config);
-
-      const sessionManager = new SessionManager(config.sessionDir);
-      const sessionId = await sessionManager.createSession();
-
-      spinner.succeed(`Session created: ${chalk.cyan(sessionId)}`);
-
-      // Show backend status
-      if (config.hummingbotUrl) {
-        console.log(chalk.gray(`Backend: Hummingbot Dashboard (${config.hummingbotUrl})`));
-      } else if (config.nofxApiUrl) {
-        console.log(chalk.gray(`Backend: nofx (${config.nofxApiUrl})`));
-      } else {
-        console.log(chalk.yellow(`No backend configured - running in offline mode`));
-        console.log(chalk.gray(`Set HUMMINGBOT_URL or NOFX_API_URL for full functionality`));
-      }
-
-      if (options.goal) {
-        console.log(chalk.gray("\nStarting discovery with your goal...\n"));
-
-        const agent = createStrategyBuilder({
-          terminalConfig: config,
-          sessionManager,
-        });
-
-        const result = await agent.discover(options.goal);
-
-        if (result.success) {
-          console.log(chalk.green("\n✓ Discovery complete"));
-        } else {
-          console.log(chalk.red(`\n✗ Discovery failed: ${result.error}`));
-        }
-      } else {
-        console.log(chalk.gray("\nSession ready. Use commands to interact:\n"));
-        console.log(`  ${chalk.cyan("donut strategy build")} - Build a new strategy`);
-        console.log(`  ${chalk.cyan("donut backtest run")} - Run a backtest`);
-        console.log(`  ${chalk.cyan("donut status")} - Check session status`);
-      }
-    } catch (error) {
-      spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
-      process.exit(1);
-    }
-  });
-
-program
-  .command("resume <sessionId>")
-  .description("Resume an existing session")
-  .action(async (sessionId) => {
-    const spinner = ora("Loading session...").start();
-
-    try {
-      const config = loadConfig();
-      const sessionManager = new SessionManager(config.sessionDir);
-      await sessionManager.loadSession(sessionId);
-
-      const state = sessionManager.getState();
-      spinner.succeed(`Session loaded: ${chalk.cyan(sessionId)}`);
-
-      console.log(chalk.gray(`\nCurrent stage: ${chalk.yellow(state.currentStage)}`));
-      console.log(chalk.gray(`Active strategy: ${state.activeStrategy?.name || "None"}`));
-      console.log(chalk.gray(`Active backtest: ${state.activeBacktestRunId || "None"}`));
-    } catch (error) {
-      spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
-      process.exit(1);
-    }
-  });
-
-program
-  .command("status")
-  .description("Show current session status")
-  .option("-s, --session <id>", "Session ID (uses most recent if not specified)")
-  .action(async (options) => {
-    try {
-      const config = loadConfig();
-      const sessionManager = new SessionManager(config.sessionDir);
-
-      // List sessions if no specific one requested
-      const sessions = await sessionManager.listSessions();
-
-      if (sessions.length === 0) {
-        console.log(chalk.yellow("No sessions found. Start one with: donut start"));
-        return;
-      }
-
-      const sessionId = options.session || sessions[sessions.length - 1];
-      await sessionManager.loadSession(sessionId);
-
-      const state = sessionManager.getState();
-
-      console.log(chalk.bold("\nSession Status"));
-      console.log(chalk.gray("─".repeat(40)));
-      console.log(`Session ID:     ${chalk.cyan(state.sessionId)}`);
-      console.log(`Current Stage:  ${chalk.yellow(state.currentStage)}`);
-      console.log(`Created:        ${state.createdAt.toISOString()}`);
-      console.log(`Updated:        ${state.updatedAt.toISOString()}`);
-
-      if (state.activeStrategy) {
-        console.log(chalk.bold("\nActive Strategy"));
-        console.log(chalk.gray("─".repeat(40)));
-        console.log(`Name:           ${chalk.green(state.activeStrategy.name)}`);
-        console.log(`Description:    ${state.activeStrategy.description || "N/A"}`);
-      }
-
-      if (state.activeBacktestRunId) {
-        console.log(chalk.bold("\nActive Backtest"));
-        console.log(chalk.gray("─".repeat(40)));
-        console.log(`Run ID:         ${chalk.magenta(state.activeBacktestRunId)}`);
-      }
-
-      if (state.pendingTrades.length > 0) {
-        console.log(chalk.bold("\nPending Trades"));
-        console.log(chalk.gray("─".repeat(40)));
-        console.log(`Count:          ${chalk.red(state.pendingTrades.length)}`);
-      }
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : error}`));
-      process.exit(1);
-    }
-  });
+registerSessionCommands(program);
 
 // ============================================================================
 // Strategy Commands
