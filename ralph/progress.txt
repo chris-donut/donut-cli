@@ -106,3 +106,24 @@ Summary:
 - DX-010: Tool event system foundation
 
 Total commits: 4 (modularization, logging, retry, shutdown, events)
+
+---
+
+## PHASE 2: AGENT IMPROVEMENTS
+
+### 2026-01-16 11:20 - AG-001 (ReAct-Style Reasoning Loop)
+- **What was implemented**: Transparent reasoning traces for agent decisions
+- **Files changed**:
+  - src/agents/reasoning.ts (new - ReasoningScratchpad class)
+  - src/agents/base-agent.ts (integrated scratchpad, emit events)
+  - src/core/types.ts (added reasoningTrace to AgentResult)
+- **Learnings for future iterations:**
+  - ReAct pattern: Thought → Action → Observation → Reflection cycle
+  - Scratchpad maintains state during execution, trace for post-run analysis
+  - Named steps with IDs allow linking start/end events
+  - Limit observation length (500 chars) to prevent trace bloat
+  - Emit agent:thinking events for TUI to show real-time progress
+  - Complete step before starting new one to maintain clean trace
+  - Include trace in AgentResult for debugging without accessing agent
+
+---

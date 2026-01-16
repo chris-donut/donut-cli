@@ -25,6 +25,12 @@ import {
   McpServerConfig,
 } from "../core/dependencies.js";
 import {
+  ReasoningScratchpad,
+  ReasoningTrace,
+  ReasoningStep,
+} from "./reasoning.js";
+import { eventBus } from "../core/events.js";
+import {
   ConsoleLogger,
   createDefaultDependencies,
   DefaultMcpServerProvider,
@@ -95,6 +101,9 @@ export abstract class BaseAgent {
 
   protected sessionId?: string;
   protected blockedTools: Set<string> = new Set();
+
+  /** ReAct-style reasoning scratchpad for transparent decision making */
+  protected readonly scratchpad: ReasoningScratchpad = new ReasoningScratchpad();
 
   constructor(config: AgentConfig) {
     this.config = config;
@@ -210,6 +219,10 @@ export abstract class BaseAgent {
 
     this.blockedTools.clear();
 
+    // Reset reasoning scratchpad for new run
+    this.scratchpad.reset();
+    this.scratchpad.startThinking(`Processing prompt: ${prompt.slice(0, 100)}...`);
+
     try {
       // Process streaming messages from the agent
       for await (const message of query({ prompt, options }) as AsyncIterable<AgentMessage>) {
@@ -235,12 +248,24 @@ export abstract class BaseAgent {
     } catch (error) {
       success = false;
       errorMessage = error instanceof Error ? error.message : String(error);
+      this.scratchpad.markError(errorMessage);
       this.logger.error("Agent run failed", {
         error: errorMessage,
         stage,
         prompt: prompt.slice(0, 100),
       });
     }
+
+    // Complete final reasoning step
+    this.scratchpad.completeStep();
+
+    // Get the reasoning trace for inclusion in result
+    const reasoningTrace = this.getReasoningTrace();
+    this.logger.debug("Agent run completed", {
+      success,
+      reasoningSteps: reasoningTrace.steps.length,
+      totalDurationMs: reasoningTrace.totalDurationMs,
+    });
 
     return {
       agentType: this.agentType,
@@ -250,6 +275,7 @@ export abstract class BaseAgent {
       sessionId: this.sessionId,
       timestamp: new Date(),
       error: errorMessage,
+      reasoningTrace, // Include trace in result for debugging
     };
   }
 
@@ -274,22 +300,37 @@ export abstract class BaseAgent {
 
     if (message.type === "text" && message.text) {
       this.logger.write(message.text);
+
+      // Emit agent:thinking event for TUI display
+      await eventBus.emit({
+        type: "agent:thinking",
+        agentName: this.agentType,
+        thought: message.text.slice(0, 200),
+        timestamp: Date.now(),
+      });
+
+      // Update scratchpad with thinking content
+      this.scratchpad.addReflection(message.text.slice(0, 500));
     }
   }
 
   /**
-   * Handle tool use messages with risk checking
+   * Handle tool use messages with risk checking and reasoning tracking
    */
   private async handleToolUse(
     message: AgentMessage,
     stage: WorkflowStage
   ): Promise<void> {
     const toolName = message.tool_name!;
+    const toolInput = (message.tool_input as Record<string, unknown>) ?? {};
+
+    // Record action in reasoning scratchpad
+    this.scratchpad.recordAction(toolName, toolInput);
 
     if (isHighRiskTool(toolName)) {
       const context: ToolExecutionContext = {
         toolName,
-        params: (message.tool_input as Record<string, unknown>) ?? {},
+        params: toolInput,
         agentType: this.agentType,
         stage,
         sessionId: this.sessionId ?? "unknown",
@@ -306,6 +347,7 @@ export abstract class BaseAgent {
       if (!riskResult.allowed) {
         this.logger.warn(`Tool blocked: ${toolName}`, { reason: riskResult.reason });
         this.blockedTools.add(toolName);
+        this.scratchpad.recordObservation(`Blocked by risk manager: ${riskResult.reason}`);
         return;
       }
     }
@@ -314,13 +356,25 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Handle tool result messages with post-execution tracking
+   * Handle tool result messages with post-execution tracking and reasoning
    */
   private async handleToolResult(
     message: AgentMessage,
     stage: WorkflowStage
   ): Promise<void> {
     const toolName = message.tool_name!;
+    const resultText = typeof message.result === "string"
+      ? message.result
+      : JSON.stringify(message.result);
+
+    // Record observation in reasoning scratchpad
+    this.scratchpad.recordObservation(
+      resultText.length > 500 ? resultText.slice(0, 500) + "..." : resultText
+    );
+    this.scratchpad.completeStep();
+
+    // Start new thinking step for processing result
+    this.scratchpad.startThinking(`Processing result from ${toolName}`);
 
     if (isHighRiskTool(toolName) && !this.blockedTools.has(toolName)) {
       const context: ToolExecutionContext = {
@@ -339,6 +393,7 @@ export abstract class BaseAgent {
    */
   resetSession(): void {
     this.sessionId = undefined;
+    this.scratchpad.reset();
   }
 
   /**
@@ -346,6 +401,21 @@ export abstract class BaseAgent {
    */
   getSessionId(): string | undefined {
     return this.sessionId;
+  }
+
+  /**
+   * Get the reasoning trace for this agent run
+   * Provides transparency into the agent's decision-making process
+   */
+  getReasoningTrace(): ReasoningTrace {
+    return this.scratchpad.getTrace(this.agentType, this.sessionId);
+  }
+
+  /**
+   * Get the current reasoning step (if any)
+   */
+  getCurrentReasoningStep(): ReasoningStep | undefined {
+    return this.scratchpad.getCurrentStep();
   }
 }
 

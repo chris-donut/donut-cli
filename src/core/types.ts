@@ -423,6 +423,24 @@ export interface AgentResult {
   timestamp: Date;
   error?: string;
   data?: Record<string, unknown>;
+  /** ReAct-style reasoning trace for debugging agent decisions */
+  reasoningTrace?: {
+    agentType: string;
+    sessionId?: string;
+    steps: Array<{
+      id: string;
+      timestamp: number;
+      thought: string;
+      action?: string;
+      actionInput?: Record<string, unknown>;
+      observation?: string;
+      reflection?: string;
+      durationMs?: number;
+    }>;
+    status: string;
+    totalDurationMs: number;
+    summary?: string;
+  };
 }
 
 export interface StageResult {

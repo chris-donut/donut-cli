@@ -1,173 +1,113 @@
 {
-  "project": "Donut CLI - Dexter-Inspired Phase 1 Foundation",
-  "branchName": "ralph/dexter-phase1-foundation",
-  "description": "Foundation improvements inspired by Dexter agent architecture: modularize CLI, add structured logging, retry logic, and graceful shutdown for production readiness.",
+  "project": "Donut CLI - Dexter-Inspired Phase 2 Agent Improvements",
+  "branchName": "ralph/dexter-phase2-agents",
+  "description": "Agent architecture improvements inspired by Dexter: ReAct-style reasoning loop, context compaction for memory efficiency, iteration limits with graceful degradation, and enhanced agent observability.",
   "userStories": [
     {
-      "id": "DX-001",
-      "title": "Create CLI Command Module Structure",
-      "description": "As a developer, I want CLI commands organized into modules so that the codebase is maintainable",
+      "id": "AG-001",
+      "title": "Implement ReAct-Style Reasoning Loop",
+      "description": "As an agent developer, I want explicit reasoning traces so that agent decisions are transparent and debuggable",
       "acceptanceCriteria": [
-        "Create src/cli/ directory with index.ts entry point",
-        "Create src/cli/commands/ directory for command modules",
-        "Move session commands (start, resume, status) to src/cli/commands/session.ts",
-        "Export registerSessionCommands(program) function",
-        "Main index.ts imports and calls register functions",
-        "All existing session commands work identically",
+        "Create src/agents/reasoning.ts with ReasoningStep interface",
+        "Include thought, action, observation, reflection fields",
+        "Add scratchpad: ReasoningStep[] to BaseAgent",
+        "Modify agent run loop to emit reasoning events",
+        "Add getReasoningTrace() method to BaseAgent",
+        "Emit agent:thinking events with thought content",
+        "Persist reasoning trace in session state",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Session commands extracted to src/cli/commands/session.ts, theme.ts created, index.ts reduced from 1350 to 1185 lines"
+      "notes": "Created ReasoningScratchpad class with thought/action/observation/reflection tracking. Integrated into BaseAgent with getReasoningTrace() method. Emits agent:thinking events via eventBus. Trace included in AgentResult for debugging."
     },
     {
-      "id": "DX-002",
-      "title": "Extract Paper Trading Commands to Module",
-      "description": "As a developer, I want paper trading commands in a separate module for better organization",
+      "id": "AG-002",
+      "title": "Add Context Compaction with Summaries",
+      "description": "As a trader, I want long sessions to not run out of context so that I can have extended conversations",
       "acceptanceCriteria": [
-        "Create src/cli/commands/paper-trading.ts",
-        "Move all 'paper' subcommands (start, status, trades, stop, list, compare)",
-        "Export registerPaperTradingCommands(program) function",
-        "Import paperTradingManager and hummingbotClient as needed",
-        "All paper trading commands work identically",
+        "Create src/agents/context-manager.ts with ContextManager class",
+        "Implement summarizeToolResult(result) using fast model",
+        "Add configurable summarization threshold (token count)",
+        "Track context token usage with estimateTokens()",
+        "Implement compactContext() to summarize oldest messages",
+        "Add context usage to agent status",
+        "Integrate with BaseAgent tool result handling",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Paper trading commands extracted to src/cli/commands/paper-trading.ts with registerPaperTradingCommands function"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "DX-003",
-      "title": "Extract Notification Commands to Module",
-      "description": "As a developer, I want notification commands in a separate module",
+      "id": "AG-003",
+      "title": "Add Iteration Limits with Graceful Degradation",
+      "description": "As a developer, I want agents to not loop forever so that runaway agents are prevented",
       "acceptanceCriteria": [
-        "Create src/cli/commands/notifications.ts",
-        "Move all 'notify' subcommands (setup, test, status)",
-        "Export registerNotificationCommands(program) function",
-        "Handle config file operations within the module",
-        "All notification commands work identically",
+        "Add maxIterations config to AgentConfig (default 25)",
+        "Track iteration count in BaseAgent run loop",
+        "When limit reached, generate progress summary instead of failing",
+        "Implement generateProgressSummary() method",
+        "Log warning when approaching limit (80% threshold)",
+        "Emit agent:iteration_limit event when triggered",
+        "Allow per-request iteration override",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Notification commands extracted to src/cli/commands/notifications.ts with registerNotificationCommands function"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "DX-004",
-      "title": "Extract Demo Commands to Module",
-      "description": "As a developer, I want demo commands in a separate module",
+      "id": "AG-004",
+      "title": "Add Agent Factory Pattern",
+      "description": "As a developer, I want async agent initialization so that setup is separated from construction",
       "acceptanceCriteria": [
-        "Create src/cli/commands/demo.ts",
-        "Move all 'demo' subcommands (tour, strategies, backtest, trades, runs)",
-        "Export registerDemoCommands(program) function",
-        "Import demo mode generators as needed",
-        "All demo commands work identically",
+        "Add static create() factory method to BaseAgent",
+        "Move async initialization to create() method",
+        "Make constructor private",
+        "Add AgentBuilder fluent interface for configuration",
+        "Support withModel(), withMaxIterations(), withTools() methods",
+        "Update existing agent creation code to use factory",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Demo commands extracted to src/cli/commands/demo.ts with registerDemoCommands function"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "DX-005",
-      "title": "Extract Strategy and Backtest Commands to Modules",
-      "description": "As a developer, I want strategy and backtest commands in separate modules",
+      "id": "AG-005",
+      "title": "Add AbortSignal Support for Cancellation",
+      "description": "As a user, I want to cancel long-running agent operations gracefully",
       "acceptanceCriteria": [
-        "Create src/cli/commands/strategy.ts with build command",
-        "Create src/cli/commands/backtest.ts with run, status, analyze commands",
-        "Export registerStrategyCommands and registerBacktestCommands functions",
-        "Update main index.ts to be under 200 lines",
-        "All commands work identically",
+        "Add abortSignal?: AbortSignal to AgentConfig",
+        "Check abortSignal.aborted in agent run loop",
+        "Return partial results on abort instead of throwing",
+        "Implement generatePartialResult() method",
+        "Clean up resources on abort (close connections, save state)",
+        "Log cancellation with context",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Strategy and backtest commands extracted. Main index.ts reduced from 783 to 67 lines (under 200 target). Fixed broken imports in base-agent.ts, added missing exports to providers.ts and dependencies.ts"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "DX-006",
-      "title": "Add Structured Logging with Pino",
-      "description": "As a developer, I want structured logging so that I can debug issues in production",
+      "id": "AG-006",
+      "title": "Add Agent Metrics and Observability",
+      "description": "As a developer, I want agent execution metrics so that I can monitor and optimize performance",
       "acceptanceCriteria": [
-        "Add pino and pino-pretty as dependencies",
-        "Create src/core/logger.ts with configured Pino logger",
-        "Support LOG_LEVEL environment variable (debug, info, warn, error)",
-        "Export logger instance and convenience functions (info, debug, error, warn)",
-        "Add child logger creation for component-specific logging",
-        "Replace console.log in one module (paper-trading.ts) with logger calls",
+        "Create src/agents/metrics.ts with AgentMetrics interface",
+        "Track: totalIterations, toolCalls, tokenUsage, duration",
+        "Track: successRate, averageToolDuration per tool",
+        "Implement collectMetrics() method in BaseAgent",
+        "Emit metrics on agent completion",
+        "Add metrics to session state for historical analysis",
+        "Export formatMetricsReport() for readable output",
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Refactored existing logger.ts to use Pino. Added structured logging to paper-trading.ts for session create/stop operations. Supports LOG_LEVEL env var, child loggers, and pino-pretty for dev."
-    },
-    {
-      "id": "DX-007",
-      "title": "Implement Retry Logic with Exponential Backoff",
-      "description": "As a trader, I want API calls to retry on failure so that transient errors don't stop execution",
-      "acceptanceCriteria": [
-        "Create src/utils/retry.ts with withRetry<T> function",
-        "Support configurable maxRetries (default 3), baseDelay (default 1000ms)",
-        "Implement exponential backoff: delay * 2^attempt",
-        "Add optional shouldRetry predicate for custom retry logic",
-        "Add RetryableError class for explicit retry requests",
-        "Apply retry logic to HummingbotClient.getCurrentPrice()",
-        "Typecheck passes"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "Created src/utils/retry.ts with withRetry function, RetryableError class, exponential backoff with jitter, shouldRetry predicate. Applied to HummingbotClient.getCurrentPrice() with structured logging for retry events."
-    },
-    {
-      "id": "DX-008",
-      "title": "Add Graceful Shutdown Handler",
-      "description": "As a developer, I want graceful shutdown so that sessions are saved on exit",
-      "acceptanceCriteria": [
-        "Create src/core/shutdown.ts with registerShutdownHandler function",
-        "Handle SIGINT and SIGTERM signals",
-        "Save any pending session state before exit",
-        "Log shutdown initiation and completion",
-        "Support async cleanup callbacks",
-        "Register handler in main CLI entry point",
-        "Ctrl+C during operation saves state before exiting",
-        "Typecheck passes"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "Created ShutdownManager singleton with signal handlers, async cleanup callbacks, timeout protection. Integrated into main CLI entry point. Handles SIGINT, SIGTERM, uncaughtException, unhandledRejection."
-    },
-    {
-      "id": "DX-009",
-      "title": "Add Custom Error Classes with Context",
-      "description": "As a developer, I want rich error context so that I can debug issues effectively",
-      "acceptanceCriteria": [
-        "Create src/core/errors.ts with DonutError base class",
-        "Include error code, context object, and cause chain",
-        "Create specific errors: NetworkError, ConfigError, ValidationError",
-        "Add toJSON() method for structured logging",
-        "Replace one error throw in hummingbot-client.ts with DonutError",
-        "Typecheck passes"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "Already implemented - DonutError, ConfigError, ApiError, ValidationError, SessionError, AgentError, RiskError, NotImplementedError all exist with formatError, logError, withRetry utilities"
-    },
-    {
-      "id": "DX-010",
-      "title": "Add Tool Event System Foundation",
-      "description": "As a developer, I want tool execution events so that the TUI can show real-time progress",
-      "acceptanceCriteria": [
-        "Create src/core/events.ts with EventBus class",
-        "Define ToolEvent union type (tool:start, tool:end, tool:error)",
-        "Support typed event subscription with on<T>(type, handler)",
-        "Support one-time listeners with once<T>(type, handler)",
-        "Add global eventBus singleton export",
-        "Emit tool:start event from one MCP server tool call",
-        "Typecheck passes"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Created EventBus class with typed event system, ToolEvent/AgentEvent unions, on/once/off methods. Added withToolEvents wrapper for easy instrumentation. Integrated into hb_backtest_start tool as demo."
+      "passes": false,
+      "notes": ""
     }
   ]
 }
