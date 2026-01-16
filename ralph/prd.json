@@ -128,8 +128,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "CLI for notification configuration"
+      "passes": true,
+      "notes": "Completed - notify setup/test/status commands with ~/.donut/notifications.json persistence"
     },
     {
       "id": "US-009",

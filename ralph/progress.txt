@@ -89,3 +89,16 @@
 
 ---
 
+### 2026-01-15 20:05 - US-008
+- **What was implemented**: Notification CLI commands (setup, test, status)
+- **Files changed**: src/index.ts
+- **Learnings for future iterations:**
+  - Config storage: Use `~/.donut/` directory pattern for user-level config
+  - `fs.mkdir(dir, { recursive: true })` ensures directory exists before writing
+  - Commander.js: `.argument("<channel>")` for positional args vs `.option()` for flags
+  - Credential validation: Always test credentials during setup (send test message)
+  - Multi-channel pattern: Store each channel config as optional property in JSON
+  - Security: Only show partial tokens/secrets in status output (`.slice(0, 10) + "..."`)
+
+---
+
