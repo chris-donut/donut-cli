@@ -184,3 +184,18 @@ Thread: https://ampcode.com/threads/T-019bc49f-1010-7729-909c-d8d33dfd81ae
   - Tool return pattern: always return `{ success, ... }` for consistent handling
 
 ---
+
+### 2026-01-15 21:45 - US-015
+Thread: https://ampcode.com/threads/T-019bc4a1-9be7-74f9-a2ab-cec5e77b8f30
+- **What was implemented**: Market Regime Detector with bull/bear/range/volatile classification
+- **Files changed**: src/agents/regime-detector.ts (new)
+- **Learnings for future iterations:**
+  - RegimeDetector is a standalone class, not extending BaseAgent (pure analytical tool)
+  - Uses dependency injection for price data: `priceDataProvider: (symbol, bars) => Promise<PriceBar[]>`
+  - Technical indicators: EMA calculated with SMA seed, ATR as EMA of True Range
+  - Slope normalization: divide by avg value to get percentage slope for cross-asset comparability
+  - Cache pattern: Map<symbol, { result, expiresAt }> with 1hr TTL
+  - Confidence scoring: weighted by score margin between top-2 regime candidates
+  - Mock provider available via `createMockRegimeDetector()` for testing
+
+---

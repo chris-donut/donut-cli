@@ -1,106 +1,119 @@
 {
-  "project": "Donut CLI - Phase 2 Completion + Phase 3 Intelligence Layer",
-  "branchName": "ralph/phase2-phase3-intelligence",
-  "description": "Complete Phase 2 Multi-Agent Foundation (risk hook wiring, PostgreSQL MCP) and implement Phase 3 Intelligence Layer (regime detection, performance attribution, confidence calibration, trade journal).",
+  "project": "Donut CLI - Phase 4 Thesis Trading Layer",
+  "branchName": "ralph/thesis-trading-layer",
+  "description": "Thesis-driven trading infrastructure: formal thesis management, conviction tracking, invalidation alerts, and thesis performance analytics for conviction-based traders.",
   "userStories": [
     {
-      "id": "US-013",
-      "title": "Wire RiskManager into BaseAgent Tool Execution",
-      "description": "As a trader, I want risk checks to run automatically before trade execution so that position limits are enforced",
+      "id": "TH-001",
+      "title": "Create Thesis Schema and Types",
+      "description": "As a thesis trader, I want a formal data model for trading theses so that I can track my convictions systematically",
       "acceptanceCriteria": [
-        "Import RiskManager in base-agent.ts",
-        "Add preToolUse hook call in processMessage() before tool execution",
-        "Block high-risk tools if RiskManager returns { allowed: false }",
-        "Log blocked trades with reason to console",
-        "Add postToolUse hook call after successful tool execution",
+        "Create src/thesis/types.ts with TradingThesis interface",
+        "Include fields: id, title, timeframe (weeks/months/years), conviction (0-100)",
+        "Include keyAssumptions array of strings",
+        "Include invalidationSignals array of strings",
+        "Include targetAllocation percentage (0-100)",
+        "Include status enum: draft, active, invalidated, closed",
+        "Include linkedPositions array of position IDs",
+        "Add Zod schemas for runtime validation",
+        "Export ThesisStatus enum and all types",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Completed - getRiskManager() integrated with preToolUseHook/postToolUseHook, blockedTools set tracking"
+      "notes": "Implemented in src/thesis/types.ts with comprehensive Zod schemas"
     },
     {
-      "id": "US-014",
-      "title": "Create PostgreSQL MCP Server for Decision Persistence",
-      "description": "As a developer, I want a PostgreSQL MCP server so that agent decisions and state can be persisted",
+      "id": "TH-002",
+      "title": "Create Thesis MCP Server",
+      "description": "As a thesis trader, I want MCP tools to manage my theses so that AI agents can help track them",
       "acceptanceCriteria": [
-        "Create src/mcp-servers/postgres-server.ts",
-        "Add pg and @types/pg dependencies",
-        "Implement decision_log tool to insert decision records",
-        "Implement decision_query tool to retrieve past decisions",
-        "Implement state_save and state_load tools for agent state",
-        "Read DATABASE_URL from environment",
-        "Fall back gracefully if database unavailable",
+        "Create src/mcp-servers/thesis-server.ts",
+        "Implement thesis_create tool to create new thesis",
+        "Implement thesis_update tool to modify thesis fields",
+        "Implement thesis_list tool to list all theses by status",
+        "Implement thesis_get tool to retrieve thesis details",
+        "Implement thesis_link_position tool to associate positions with thesis",
+        "Store theses in .sessions/theses/ as JSON files",
+        "Export createThesisMcpServer factory function",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Completed - pg pool with graceful fallback, decision_log/decision_query/state_save/state_load tools"
+      "notes": "Implemented in src/mcp-servers/thesis-server.ts with 6 MCP tools"
     },
     {
-      "id": "US-015",
-      "title": "Create Market Regime Detector Agent",
-      "description": "As a trader, I want automatic market regime detection so that strategies adapt to conditions",
+      "id": "TH-003",
+      "title": "Create Thesis Analyst Agent",
+      "description": "As a thesis trader, I want an AI agent that monitors if my thesis still holds",
       "acceptanceCriteria": [
-        "Create src/agents/regime-detector.ts",
-        "Implement detectRegime(symbol) returning bull/bear/range/volatile",
-        "Use moving average slopes and volatility indicators",
-        "Add confidence score 0-1 for regime classification",
-        "Cache regime for 1 hour to avoid excessive recalculation",
+        "Create src/agents/thesis-analyst.ts extending BaseAgent",
+        "Implement analyzeThesis(thesisId) method",
+        "Check each keyAssumption against current market data",
+        "Check invalidationSignals against recent events",
+        "Return ThesisHealth object with assumptionStatuses and overallHealth score",
+        "Include recommendations (hold, reduce, close, increase)",
+        "Add agent to orchestrator's available specialists",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in src/agents/thesis-analyst.ts with health checking and recommendations"
     },
     {
-      "id": "US-016",
-      "title": "Create Performance Attribution System",
-      "description": "As a trader, I want to understand why strategies win or lose",
+      "id": "TH-004",
+      "title": "Implement Invalidation Alert System",
+      "description": "As a thesis trader, I want alerts when my thesis assumptions break",
       "acceptanceCriteria": [
-        "Create src/analytics/attribution.ts",
-        "Implement attributeByRegime() grouping PnL by market regime",
-        "Implement attributeByTimeOfDay() grouping PnL by hour",
-        "Implement attributeBySymbol() grouping PnL by asset",
-        "Return ranked list of factors with contribution percentage",
+        "Create src/thesis/invalidation-monitor.ts",
+        "Define InvalidationAlert type with thesisId, signal, severity, timestamp",
+        "Implement checkInvalidationSignals(thesis) function",
+        "Support price-based signals (symbol breaks $X level)",
+        "Support time-based signals (thesis older than timeframe)",
+        "Support conviction-based signals (conviction dropped below threshold)",
+        "Return array of triggered InvalidationAlerts",
+        "Integrate with thesis_check MCP tool",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in src/thesis/invalidation-monitor.ts with price, time, conviction-based signals"
     },
     {
-      "id": "US-017",
-      "title": "Create Confidence Calibration Tracker",
-      "description": "As a trader, I want to track prediction accuracy to calibrate confidence",
+      "id": "TH-005",
+      "title": "Create Conviction Tracker",
+      "description": "As a thesis trader, I want to track how my conviction evolves over time",
       "acceptanceCriteria": [
-        "Create src/analytics/calibration.ts",
-        "Track predictions with confidence scores",
-        "Compare predictions to actual outcomes",
-        "Calculate calibration curve (predicted vs actual)",
-        "Report over/under confidence bias",
-        "Persist calibration data to .sessions/calibration.json",
+        "Create src/thesis/conviction-tracker.ts",
+        "Define ConvictionChange type with thesisId, oldConviction, newConviction, reason, timestamp",
+        "Implement recordConvictionChange(thesisId, newConviction, reason) function",
+        "Implement getConvictionHistory(thesisId) returning chronological changes",
+        "Implement detectMismatch(thesis) comparing conviction to position sizing",
+        "Add mismatchScore: high conviction + small position = underexposed",
+        "Persist conviction history to .sessions/conviction-history.json",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in src/thesis/conviction-tracker.ts with mismatch detection and trend analysis"
     },
     {
-      "id": "US-018",
-      "title": "Create Trade Journal MCP Server",
-      "description": "As a trader, I want a trade journal so that I can review decision rationale",
+      "id": "TH-006",
+      "title": "Create Thesis Performance Analytics",
+      "description": "As a thesis trader, I want to analyze which theses performed best historically",
       "acceptanceCriteria": [
-        "Create src/mcp-servers/journal-server.ts",
-        "Implement journal_entry tool to log trade decisions with rationale",
-        "Implement journal_search tool to find entries by date/symbol/tag",
-        "Implement journal_summary tool to generate period summaries",
-        "Store entries in .sessions/journal/ as markdown files",
+        "Create src/analytics/thesis-performance.ts",
+        "Define ThesisPerformance type with thesisId, totalPnl, roiPercent, duration, wasCorrect",
+        "Implement calculateThesisPerformance(thesis) aggregating linked position PnL",
+        "Implement rankThesesByPerformance() returning sorted list",
+        "Implement analyzeThesisOutcomes() returning accuracy rate by timeframe",
+        "Calculate conviction calibration: was high conviction = high returns?",
+        "Export formatThesisPerformanceReport() for readable output",
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in src/analytics/thesis-performance.ts with calibration analysis and performance reports"
     }
   ]
 }

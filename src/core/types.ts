@@ -24,6 +24,7 @@ export enum AgentType {
   CHART_ANALYST = "chart_analyst",
   EXECUTION_ASSISTANT = "execution_assistant",
   SENTIMENT_ANALYST = "sentiment_analyst",
+  THESIS_ANALYST = "thesis_analyst",
 }
 
 export const STAGE_ORDER: WorkflowStage[] = [

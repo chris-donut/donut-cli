@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #1118 | 8:21 PM | 🔵 | Donut CLI: Unified Trading Terminal with Claude Agent SDK | ~1063 |
 | #852 | 12:49 PM | 🔴 | Fixed TypeScript import path to remove .js extension | ~228 |
 </claude-mem-context>
