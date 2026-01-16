@@ -157,3 +157,17 @@ Total commits: 4 (modularization, logging, retry, shutdown, events)
   - Allow per-config override via maxIterations property
 
 ---
+
+### 2026-01-16 11:50 - AG-004 (Agent Factory Pattern)
+- **What was implemented**: Fluent builder for agent configuration
+- **Files changed**:
+  - src/agents/agent-builder.ts (new - AgentBuilder class)
+- **Learnings for future iterations:**
+  - Builder pattern enables readable: `AgentBuilder.create(...).withModel().build()`
+  - Separate buildAsync() for future async initialization needs
+  - Keep constructor protected (not private) for backwards compatibility
+  - AgentConstructor<T> type enables generic factory methods
+  - createAgent() convenience function for simple cases without full builder
+  - Builder accumulates config, applies all at once in build()
+
+---

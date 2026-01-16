@@ -71,8 +71,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created AgentBuilder class with fluent interface. Supports withModel(), withMaxIterations(), withTools(), withDependencies(). Includes createAgent() and createAgentAsync() convenience functions. Constructor kept protected for backwards compatibility."
     },
     {
       "id": "AG-005",
