@@ -298,6 +298,56 @@ export const PaperSessionSchema = z.object({
 export type PaperSession = z.infer<typeof PaperSessionSchema>;
 
 // ============================================================================
+// Notification Schemas
+// ============================================================================
+
+export const NotificationChannelSchema = z.enum(["telegram", "discord", "webhook"]);
+export type NotificationChannel = z.infer<typeof NotificationChannelSchema>;
+
+export const TelegramConfigSchema = z.object({
+  botToken: z.string().min(1),
+  chatId: z.string().min(1),
+});
+
+export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
+
+export const DiscordConfigSchema = z.object({
+  webhookUrl: z.string().url(),
+});
+
+export type DiscordConfig = z.infer<typeof DiscordConfigSchema>;
+
+export const WebhookConfigSchema = z.object({
+  url: z.string().url(),
+  headers: z.record(z.string()).optional(),
+});
+
+export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
+
+export const NotificationConfigSchema = z.object({
+  channel: NotificationChannelSchema,
+  enabled: z.boolean().default(true),
+  settings: z.union([TelegramConfigSchema, DiscordConfigSchema, WebhookConfigSchema]),
+});
+
+export type NotificationConfig = z.infer<typeof NotificationConfigSchema>;
+
+export const TradeApprovalRequestSchema = z.object({
+  tradeId: z.string().uuid(),
+  symbol: z.string(),
+  side: SideSchema,
+  size: z.number().positive(),
+  price: z.number().positive(),
+  expiresAt: z.number(),
+  createdAt: z.number(),
+});
+
+export type TradeApprovalRequest = z.infer<typeof TradeApprovalRequestSchema>;
+
+export const ApprovalResponseSchema = z.enum(["APPROVE", "REJECT", "EXPIRED"]);
+export type ApprovalResponse = z.infer<typeof ApprovalResponseSchema>;
+
+// ============================================================================
 // Session & Workflow Types
 // ============================================================================
 
