@@ -7,9 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #1028 | 7:26 PM | 🟣 | Notification and Trade Approval Type Schemas Implemented | ~639 |
-| #966 | 5:34 PM | 🔵 | TerminalConfig Interface Structure for Integration Extensions | ~520 |
-| #964 | 5:33 PM | 🔵 | Comprehensive Hummingbot Dashboard Analysis Completed via Explore Agent | ~803 |
-| #965 | " | 🔵 | Configuration Management Review Post-Hummingbot Analysis | ~452 |
+| #965 | 5:33 PM | 🔵 | Configuration Management Review Post-Hummingbot Analysis | ~452 |
 | #954 | 1:09 PM | 🔵 | Session Manager State Structure and Initialization | ~594 |
 </claude-mem-context>
