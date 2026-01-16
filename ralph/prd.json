@@ -144,8 +144,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Demo data generators for onboarding"
+      "passes": true,
+      "notes": "Completed - Full demo data generators with [DEMO] prefix, strategies, trades, equity curves"
     },
     {
       "id": "US-010",

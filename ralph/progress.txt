@@ -102,3 +102,16 @@
 
 ---
 
+### 2026-01-15 20:15 - US-009
+- **What was implemented**: Demo mode data generators for onboarding
+- **Files changed**: src/modes/demo-mode.ts (new file)
+- **Learnings for future iterations:**
+  - Use `[DEMO]` prefix in all demo data names for clear identification
+  - Realistic data generation: Add slight randomization with biases (55% win rate, long bias)
+  - Base prices: Store realistic prices for each symbol to generate variations
+  - Seed-based variants: Use `seed` parameter to generate deterministic variations
+  - Trade pairs: Generate entry + exit trades together to maintain consistency
+  - Equity curves: Small random drift with upward bias simulates realistic returns
+
+---
+
