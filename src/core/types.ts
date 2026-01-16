@@ -18,10 +18,12 @@ export enum WorkflowStage {
 }
 
 export enum AgentType {
+  ORCHESTRATOR = "orchestrator",
   STRATEGY_BUILDER = "strategy_builder",
   BACKTEST_ANALYST = "backtest_analyst",
   CHART_ANALYST = "chart_analyst",
   EXECUTION_ASSISTANT = "execution_assistant",
+  SENTIMENT_ANALYST = "sentiment_analyst",
 }
 
 export const STAGE_ORDER: WorkflowStage[] = [
@@ -559,3 +561,186 @@ export function toolRequiresApproval(stage: WorkflowStage, tool: string): boolea
   const permission = permissions.find((p) => p.tool === tool);
   return permission?.requiresApproval ?? false;
 }
+
+// ============================================================================
+// Orchestrator Types (Phase 2: Multi-Agent Foundation)
+// ============================================================================
+
+export enum TaskStatus {
+  PENDING = "pending",
+  IN_PROGRESS = "in_progress",
+  COMPLETED = "completed",
+  FAILED = "failed",
+  CANCELLED = "cancelled",
+}
+
+export const TaskStatusSchema = z.nativeEnum(TaskStatus);
+
+export interface SubagentTask {
+  taskId: string;
+  agentType: AgentType;
+  prompt: string;
+  stage: WorkflowStage;
+  status: TaskStatus;
+  result?: string;
+  error?: string;
+  startedAt: string;
+  completedAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export const SubagentTaskSchema = z.object({
+  taskId: z.string().uuid(),
+  agentType: z.nativeEnum(AgentType),
+  prompt: z.string(),
+  stage: z.nativeEnum(WorkflowStage),
+  status: TaskStatusSchema,
+  result: z.string().optional(),
+  error: z.string().optional(),
+  startedAt: z.string(),
+  completedAt: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export interface SynthesisRecord {
+  synthesisId: string;
+  taskIds: string[];
+  combinedResult: string;
+  timestamp: string;
+}
+
+export const SynthesisRecordSchema = z.object({
+  synthesisId: z.string().uuid(),
+  taskIds: z.array(z.string().uuid()),
+  combinedResult: z.string(),
+  timestamp: z.string(),
+});
+
+export interface OrchestratorSession {
+  activeTasks: SubagentTask[];
+  completedTasks: SubagentTask[];
+  synthesisHistory: SynthesisRecord[];
+}
+
+export const OrchestratorSessionSchema = z.object({
+  activeTasks: z.array(SubagentTaskSchema),
+  completedTasks: z.array(SubagentTaskSchema),
+  synthesisHistory: z.array(SynthesisRecordSchema),
+});
+
+// ============================================================================
+// Risk Management Types
+// ============================================================================
+
+export interface RiskConfig {
+  maxPositionSizeUsd: number;
+  maxDailyLossUsd: number;
+  maxOpenPositions: number;
+  requireConfirmation: boolean;
+  blacklistedSymbols: string[];
+}
+
+export const RiskConfigSchema = z.object({
+  maxPositionSizeUsd: z.number().positive().default(10000),
+  maxDailyLossUsd: z.number().positive().default(1000),
+  maxOpenPositions: z.number().int().positive().default(5),
+  requireConfirmation: z.boolean().default(true),
+  blacklistedSymbols: z.array(z.string()).default([]),
+});
+
+export interface RiskCheckResult {
+  allowed: boolean;
+  reason?: string;
+  modifiedParams?: Record<string, unknown>;
+  warnings: string[];
+}
+
+export interface ToolExecutionContext {
+  toolName: string;
+  params: Record<string, unknown>;
+  agentType: AgentType;
+  stage: WorkflowStage;
+  sessionId: string;
+}
+
+/**
+ * High-risk tools that require pre-execution validation
+ */
+export const HIGH_RISK_TOOLS = [
+  "donut_execute_trade",
+  "donut_place_order",
+  "donut_modify_position",
+  "donut_close_all_positions",
+] as const;
+
+export type HighRiskTool = (typeof HIGH_RISK_TOOLS)[number];
+
+export function isHighRiskTool(toolName: string): toolName is HighRiskTool {
+  return HIGH_RISK_TOOLS.includes(toolName as HighRiskTool);
+}
+
+// ============================================================================
+// Sentiment Analyst Types
+// ============================================================================
+
+export interface TwitterConfig {
+  apiKey?: string;
+  apiSecret?: string;
+  bearerToken?: string;
+}
+
+export interface DiscordSentimentConfig {
+  botToken?: string;
+  guildIds?: string[];
+}
+
+export interface TelegramSentimentConfig {
+  botToken?: string;
+  channelIds?: string[];
+}
+
+export interface SentimentApiConfig {
+  twitter?: TwitterConfig;
+  discord?: DiscordSentimentConfig;
+  telegram?: TelegramSentimentConfig;
+  useMockData: boolean;
+}
+
+export const SentimentApiConfigSchema = z.object({
+  twitter: z.object({
+    apiKey: z.string().optional(),
+    apiSecret: z.string().optional(),
+    bearerToken: z.string().optional(),
+  }).optional(),
+  discord: z.object({
+    botToken: z.string().optional(),
+    guildIds: z.array(z.string()).optional(),
+  }).optional(),
+  telegram: z.object({
+    botToken: z.string().optional(),
+    channelIds: z.array(z.string()).optional(),
+  }).optional(),
+  useMockData: z.boolean().default(true),
+});
+
+export type SentimentSource = "twitter" | "discord" | "telegram" | "mock";
+
+export interface SentimentData {
+  source: SentimentSource;
+  symbol: string;
+  score: number; // -1 to 1 (bearish to bullish)
+  confidence: number; // 0 to 1
+  sampleSize: number;
+  timestamp: string;
+  rawData?: unknown;
+}
+
+export const SentimentDataSchema = z.object({
+  source: z.enum(["twitter", "discord", "telegram", "mock"]),
+  symbol: z.string(),
+  score: z.number().min(-1).max(1),
+  confidence: z.number().min(0).max(1),
+  sampleSize: z.number().int().nonnegative(),
+  timestamp: z.string(),
+  rawData: z.unknown().optional(),
+});
