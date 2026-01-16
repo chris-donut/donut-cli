@@ -66,6 +66,12 @@ export interface AgentConfig {
    * Agent will generate progress summary instead of failing
    */
   maxIterations?: number;
+
+  /**
+   * Optional abort signal for graceful cancellation
+   * When aborted, agent generates partial result instead of throwing
+   */
+  abortSignal?: AbortSignal;
 }
 
 // ============================================================================
@@ -253,6 +259,16 @@ export abstract class BaseAgent {
     try {
       // Process streaming messages from the agent
       for await (const message of query({ prompt, options }) as AsyncIterable<AgentMessage>) {
+        // Check for abort signal
+        if (this.config.abortSignal?.aborted) {
+          this.logger.info("Agent run aborted by signal", {
+            iterations: this.iterationCount,
+            stage,
+          });
+          result = this.generatePartialResult("Aborted by user");
+          break;
+        }
+
         // Check iteration limit before processing
         if (this.checkIterationLimit()) {
           result = this.generateProgressSummary();
@@ -513,6 +529,33 @@ export abstract class BaseAgent {
    */
   hasReachedIterationLimit(): boolean {
     return this.iterationCount >= this.maxIterations;
+  }
+
+  /**
+   * Generate a partial result when agent is cancelled
+   * This provides useful output even on early termination
+   */
+  protected generatePartialResult(reason: string): string {
+    const trace = this.getReasoningTrace();
+    const contextUsage = this.contextManager.getUsage();
+
+    const completedActions = trace.steps
+      .filter((s) => s.action)
+      .map((s) => `- ${s.action}`)
+      .slice(-5); // Last 5 actions
+
+    return [
+      `⚠️ Agent stopped: ${reason}`,
+      "",
+      `Iterations completed: ${this.iterationCount}`,
+      `Reasoning steps: ${trace.steps.length}`,
+      `Context usage: ${(contextUsage.percentUsed * 100).toFixed(1)}%`,
+      "",
+      "Recent actions:",
+      completedActions.length > 0 ? completedActions.join("\n") : "- No actions completed",
+      "",
+      "Session preserved - you can resume with additional instructions.",
+    ].join("\n");
   }
 
   /**

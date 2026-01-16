@@ -88,8 +88,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added abortSignal to AgentConfig, check in run loop, generatePartialResult() method shows recent actions and preserves session. Logged with context."
     },
     {
       "id": "AG-006",

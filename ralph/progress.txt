@@ -171,3 +171,17 @@ Total commits: 4 (modularization, logging, retry, shutdown, events)
   - Builder accumulates config, applies all at once in build()
 
 ---
+
+### 2026-01-16 11:55 - AG-005 (AbortSignal Support for Cancellation)
+- **What was implemented**: Graceful agent cancellation with partial results
+- **Files changed**:
+  - src/agents/base-agent.ts (added abort signal support)
+- **Learnings for future iterations:**
+  - AbortSignal is standard browser/Node API for cancellation
+  - Check aborted flag each iteration, not just at start
+  - generatePartialResult() provides useful output even on cancel
+  - Show last 5 actions to indicate what was accomplished
+  - Session preserved - user can continue with new prompt
+  - Log cancellation with iteration count for debugging
+
+---
