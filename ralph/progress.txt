@@ -141,3 +141,17 @@
 
 ---
 
+### 2026-01-15 21:00 - US-012
+- **What was implemented**: Paper vs Backtest comparison view with side-by-side metrics table
+- **Files changed**: src/modes/paper-trading.ts, src/index.ts
+- **Learnings for future iterations:**
+  - PaperTradingMetrics interface mirrors BacktestMetrics for easy comparison
+  - Delta calculation: `((paper - backtest) / Math.abs(backtest)) * 100` for percentage diff
+  - Inverse metrics (drawdown, loss): Use `inverse: boolean` parameter to flip color logic
+  - Sharpe ratio from trades: Use per-trade returns as proxy, annualized with sqrt(252)
+  - Max drawdown tracking: Peak equity and running equity calculation on trade-by-trade basis
+  - Table formatting: Use `.padStart()` and `.padEnd()` for aligned columns in CLI
+  - Legend pattern: Add explanation of color coding at bottom of comparison table
+
+---
+

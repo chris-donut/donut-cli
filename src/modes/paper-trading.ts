@@ -424,6 +424,103 @@ function calculatePnL(
 }
 
 // ============================================================================
+// Metrics Calculation
+// ============================================================================
+
+/**
+ * Paper trading metrics comparable to backtest metrics
+ */
+export interface PaperTradingMetrics {
+  totalReturnPct: number;
+  maxDrawdownPct: number;
+  sharpeRatio: number;
+  profitFactor: number;
+  winRate: number;
+  trades: number;
+  avgWin: number;
+  avgLoss: number;
+}
+
+/**
+ * Calculate metrics from a paper trading session
+ * Returns metrics comparable to backtest results for comparison
+ */
+export function calculatePaperMetrics(session: PaperSession): PaperTradingMetrics {
+  const closedTrades = session.trades.filter((t) => t.pnl !== undefined);
+  const wins = closedTrades.filter((t) => (t.pnl || 0) > 0);
+  const losses = closedTrades.filter((t) => (t.pnl || 0) < 0);
+
+  // Total return
+  const totalPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const totalReturnPct = (totalPnl / session.initialBalance) * 100;
+
+  // Win rate
+  const winRate = closedTrades.length > 0 ? wins.length / closedTrades.length : 0;
+
+  // Average win/loss (as percentage of initial balance)
+  const avgWin = wins.length > 0
+    ? (wins.reduce((sum, t) => sum + (t.pnl || 0), 0) / wins.length / session.initialBalance) * 100
+    : 0;
+  const avgLoss = losses.length > 0
+    ? (losses.reduce((sum, t) => sum + Math.abs(t.pnl || 0), 0) / losses.length / session.initialBalance) * 100
+    : 0;
+
+  // Profit factor
+  const grossProfit = wins.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const grossLoss = Math.abs(losses.reduce((sum, t) => sum + (t.pnl || 0), 0));
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
+
+  // Max drawdown - simplified calculation based on running equity
+  let maxDrawdownPct = 0;
+  let peak = session.initialBalance;
+  let runningEquity = session.initialBalance;
+
+  for (const trade of session.trades) {
+    if (trade.pnl !== undefined) {
+      runningEquity += trade.pnl;
+      if (runningEquity > peak) {
+        peak = runningEquity;
+      }
+      const drawdown = ((peak - runningEquity) / peak) * 100;
+      if (drawdown > maxDrawdownPct) {
+        maxDrawdownPct = drawdown;
+      }
+    }
+  }
+
+  // Sharpe ratio - simplified: (avg return - risk free) / std dev
+  // Using daily returns approximation
+  const returns: number[] = [];
+  let currentEquity = session.initialBalance;
+  for (const trade of closedTrades) {
+    const prevEquity = currentEquity;
+    currentEquity += trade.pnl || 0;
+    const dailyReturn = (currentEquity - prevEquity) / prevEquity;
+    returns.push(dailyReturn);
+  }
+
+  let sharpeRatio = 0;
+  if (returns.length > 1) {
+    const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+    // Annualized Sharpe (assuming 252 trading days)
+    sharpeRatio = stdDev > 0 ? (avgReturn * Math.sqrt(252)) / stdDev : 0;
+  }
+
+  return {
+    totalReturnPct,
+    maxDrawdownPct,
+    sharpeRatio,
+    profitFactor: profitFactor === Infinity ? 999 : profitFactor,
+    winRate,
+    trades: closedTrades.length,
+    avgWin,
+    avgLoss,
+  };
+}
+
+// ============================================================================
 // Internal Helpers
 // ============================================================================
 

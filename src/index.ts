@@ -24,6 +24,7 @@ import {
   getPaperSession,
   listPaperSessions,
   stopPaperSession,
+  calculatePaperMetrics,
 } from "./modes/paper-trading.js";
 import { HummingbotClient } from "./integrations/hummingbot-client.js";
 import {
@@ -733,6 +734,149 @@ paper
           `${returnPct >= 0 ? chalk.green(("+" + returnPct.toFixed(1) + "%").padStart(8)) : chalk.red((returnPct.toFixed(1) + "%").padStart(8))}`
         );
       }
+    } catch (error) {
+      spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
+      process.exit(1);
+    }
+  });
+
+paper
+  .command("compare <sessionId> <backtestRunId>")
+  .description("Compare paper trading results with backtest predictions")
+  .action(async (sessionId: string, backtestRunId: string) => {
+    const spinner = ora("Loading comparison data...").start();
+
+    try {
+      const config = loadConfig();
+
+      // Require Hummingbot for backtest metrics
+      if (!config.hummingbotUrl) {
+        spinner.fail(chalk.red("Comparison requires Hummingbot Dashboard"));
+        console.log(chalk.gray("\nSet HUMMINGBOT_URL in your .env file."));
+        process.exit(1);
+      }
+
+      // Find paper session
+      const sessions = await listPaperSessions();
+      const session = sessions.find((s) => s.id === sessionId || s.id.startsWith(sessionId));
+      if (!session) {
+        spinner.fail(chalk.red(`Paper session not found: ${sessionId}`));
+        process.exit(1);
+      }
+
+      // Fetch backtest metrics
+      spinner.text = "Fetching backtest metrics...";
+      const hbClient = new HummingbotClient({ baseUrl: config.hummingbotUrl });
+      const backtestMetrics = await hbClient.getBacktestMetrics(backtestRunId);
+
+      // Calculate paper metrics
+      const paperMetrics = calculatePaperMetrics(session);
+
+      spinner.succeed("Comparison data loaded");
+
+      // Helper function to calculate delta and format
+      const formatDelta = (paper: number, backtest: number, suffix: string = "", inverse: boolean = false): string => {
+        if (backtest === 0) return chalk.gray("N/A");
+        const delta = ((paper - backtest) / Math.abs(backtest)) * 100;
+        const isSignificant = Math.abs(delta) > 20;
+        const sign = delta >= 0 ? "+" : "";
+        const formatted = `${sign}${delta.toFixed(1)}%`;
+        // For metrics where lower is better (like drawdown), inverse the color logic
+        if (inverse) {
+          return isSignificant ? (delta > 0 ? chalk.red(formatted) : chalk.green(formatted)) : chalk.yellow(formatted);
+        }
+        return isSignificant ? (delta < 0 ? chalk.red(formatted) : chalk.green(formatted)) : chalk.yellow(formatted);
+      };
+
+      const formatValue = (value: number, suffix: string = "", decimals: number = 2): string => {
+        return value.toFixed(decimals) + suffix;
+      };
+
+      // Display comparison table
+      console.log(chalk.bold("\nPaper vs Backtest Comparison"));
+      console.log(chalk.gray("─".repeat(70)));
+      console.log(chalk.gray(`Paper Session: ${session.id.slice(0, 8)}...`));
+      console.log(chalk.gray(`Backtest Run:  ${backtestRunId}`));
+      console.log(chalk.gray("─".repeat(70)));
+
+      // Table header
+      console.log(
+        chalk.bold("Metric".padEnd(20)) +
+        chalk.cyan("Paper".padStart(15)) +
+        chalk.magenta("Backtest".padStart(15)) +
+        chalk.yellow("Delta".padStart(15))
+      );
+      console.log(chalk.gray("─".repeat(70)));
+
+      // Total Return
+      console.log(
+        "Total Return".padEnd(20) +
+        chalk.cyan(formatValue(paperMetrics.totalReturnPct, "%").padStart(15)) +
+        chalk.magenta(formatValue(backtestMetrics.totalReturnPct, "%").padStart(15)) +
+        formatDelta(paperMetrics.totalReturnPct, backtestMetrics.totalReturnPct).padStart(15)
+      );
+
+      // Win Rate
+      console.log(
+        "Win Rate".padEnd(20) +
+        chalk.cyan(formatValue(paperMetrics.winRate * 100, "%", 1).padStart(15)) +
+        chalk.magenta(formatValue(backtestMetrics.winRate * 100, "%", 1).padStart(15)) +
+        formatDelta(paperMetrics.winRate * 100, backtestMetrics.winRate * 100).padStart(15)
+      );
+
+      // Max Drawdown (inverse - lower is better)
+      console.log(
+        "Max Drawdown".padEnd(20) +
+        chalk.cyan(formatValue(-paperMetrics.maxDrawdownPct, "%").padStart(15)) +
+        chalk.magenta(formatValue(-backtestMetrics.maxDrawdownPct, "%").padStart(15)) +
+        formatDelta(paperMetrics.maxDrawdownPct, backtestMetrics.maxDrawdownPct, "%", true).padStart(15)
+      );
+
+      // Sharpe Ratio
+      console.log(
+        "Sharpe Ratio".padEnd(20) +
+        chalk.cyan(formatValue(paperMetrics.sharpeRatio, "").padStart(15)) +
+        chalk.magenta(formatValue(backtestMetrics.sharpeRatio, "").padStart(15)) +
+        formatDelta(paperMetrics.sharpeRatio, backtestMetrics.sharpeRatio).padStart(15)
+      );
+
+      // Profit Factor
+      console.log(
+        "Profit Factor".padEnd(20) +
+        chalk.cyan(formatValue(paperMetrics.profitFactor, "").padStart(15)) +
+        chalk.magenta(formatValue(backtestMetrics.profitFactor, "").padStart(15)) +
+        formatDelta(paperMetrics.profitFactor, backtestMetrics.profitFactor).padStart(15)
+      );
+
+      // Trade Count
+      console.log(
+        "Trades".padEnd(20) +
+        chalk.cyan(paperMetrics.trades.toString().padStart(15)) +
+        chalk.magenta(backtestMetrics.trades.toString().padStart(15)) +
+        formatDelta(paperMetrics.trades, backtestMetrics.trades).padStart(15)
+      );
+
+      // Average Win
+      console.log(
+        "Avg Win".padEnd(20) +
+        chalk.cyan(formatValue(paperMetrics.avgWin, "%").padStart(15)) +
+        chalk.magenta(formatValue(backtestMetrics.avgWin, "%").padStart(15)) +
+        formatDelta(paperMetrics.avgWin, backtestMetrics.avgWin).padStart(15)
+      );
+
+      // Average Loss
+      console.log(
+        "Avg Loss".padEnd(20) +
+        chalk.cyan(formatValue(-paperMetrics.avgLoss, "%").padStart(15)) +
+        chalk.magenta(formatValue(-backtestMetrics.avgLoss, "%").padStart(15)) +
+        formatDelta(paperMetrics.avgLoss, backtestMetrics.avgLoss, "%", true).padStart(15)
+      );
+
+      console.log(chalk.gray("─".repeat(70)));
+      console.log(chalk.gray("\nLegend: Delta > 20% highlighted (") +
+        chalk.green("green") + chalk.gray(" = paper outperformed, ") +
+        chalk.red("red") + chalk.gray(" = paper underperformed)"));
+
     } catch (error) {
       spinner.fail(chalk.red(`Failed: ${error instanceof Error ? error.message : error}`));
       process.exit(1);
