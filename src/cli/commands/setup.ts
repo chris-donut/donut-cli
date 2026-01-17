@@ -1,0 +1,442 @@
+/**
+ * Setup Command - Interactive first-run configuration wizard
+ */
+
+import { Command } from "commander";
+import chalk from "chalk";
+import { createInterface } from "readline";
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import { execSync } from "child_process";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = join(__dirname, "..", "..", "..");
+
+interface SetupStatus {
+  envExists: boolean;
+  apiKeyConfigured: boolean;
+  apiKeyValid: boolean;
+  nodeVersion: string | null;
+  bunVersion: string | null;
+  buildExists: boolean;
+  globallyLinked: boolean;
+  backendsConfigured: {
+    hummingbot: boolean;
+    nofx: boolean;
+  };
+}
+
+/**
+ * Safe command execution - only runs predefined commands, never user input
+ */
+function safeExec(command: string): string | null {
+  // Whitelist of allowed commands for security
+  const allowedCommands = [
+    "node -v",
+    "bun -v",
+    "which donut",
+    "where donut",
+    "bun run build",
+    "npm run build",
+    "npm link",
+  ];
+
+  if (!allowedCommands.some((allowed) => command.startsWith(allowed))) {
+    return null;
+  }
+
+  try {
+    return execSync(command, { encoding: "utf-8", stdio: "pipe" }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get current setup status
+ */
+function checkStatus(): SetupStatus {
+  const envPath = join(PROJECT_ROOT, ".env");
+  const distPath = join(PROJECT_ROOT, "dist", "index.js");
+
+  let envExists = existsSync(envPath);
+  let apiKeyConfigured = false;
+  let backendsConfigured = { hummingbot: false, nofx: false };
+
+  if (envExists) {
+    const envContent = readFileSync(envPath, "utf-8");
+    apiKeyConfigured = /^ANTHROPIC_API_KEY=sk-ant-.+$/m.test(envContent);
+    backendsConfigured.hummingbot = /^HUMMINGBOT_URL=.+$/m.test(envContent);
+    backendsConfigured.nofx = /^NOFX_API_URL=.+$/m.test(envContent);
+  }
+
+  const nodeVersion = safeExec("node -v");
+  const bunVersion = safeExec("bun -v");
+
+  let globallyLinked = false;
+  const whichDonut = safeExec("which donut") || safeExec("where donut");
+  globallyLinked = !!whichDonut && whichDonut.length > 0;
+
+  return {
+    envExists,
+    apiKeyConfigured,
+    apiKeyValid: false, // Will be validated separately
+    nodeVersion,
+    bunVersion,
+    buildExists: existsSync(distPath),
+    globallyLinked,
+    backendsConfigured,
+  };
+}
+
+/**
+ * Print status with colors
+ */
+function printStatus(status: SetupStatus): void {
+  console.log(chalk.bold("\nSetup Status\n"));
+  console.log(chalk.gray("─".repeat(50)));
+
+  // Environment
+  console.log(chalk.bold("\nEnvironment"));
+  console.log(
+    `  Node.js:     ${status.nodeVersion ? chalk.green(status.nodeVersion) : chalk.red("Not found")}`
+  );
+  console.log(
+    `  Bun:         ${status.bunVersion ? chalk.green(`v${status.bunVersion}`) : chalk.yellow("Not found (optional)")}`
+  );
+
+  // Configuration
+  console.log(chalk.bold("\nConfiguration"));
+  console.log(
+    `  .env file:   ${status.envExists ? chalk.green("✓ Exists") : chalk.yellow("✗ Missing")}`
+  );
+  console.log(
+    `  API key:     ${status.apiKeyConfigured ? chalk.green("✓ Configured") : chalk.yellow("✗ Not set")}`
+  );
+
+  // Build
+  console.log(chalk.bold("\nBuild"));
+  console.log(
+    `  Compiled:    ${status.buildExists ? chalk.green("✓ Ready") : chalk.yellow("✗ Run 'bun run build'")}`
+  );
+  console.log(
+    `  Global CLI:  ${status.globallyLinked ? chalk.green("✓ 'donut' available") : chalk.gray("✗ Run 'npm link' to enable")}`
+  );
+
+  // Backends
+  console.log(chalk.bold("\nBackends (Optional)"));
+  console.log(
+    `  Hummingbot:  ${status.backendsConfigured.hummingbot ? chalk.green("✓ Configured") : chalk.gray("Not configured")}`
+  );
+  console.log(
+    `  nofx:        ${status.backendsConfigured.nofx ? chalk.green("✓ Configured") : chalk.gray("Not configured")}`
+  );
+
+  console.log("\n" + chalk.gray("─".repeat(50)));
+}
+
+/**
+ * Prompt for user input
+ */
+async function prompt(question: string, defaultValue?: string): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const defaultText = defaultValue ? ` (${defaultValue})` : "";
+
+  return new Promise((resolve) => {
+    rl.question(`${question}${defaultText}: `, (answer) => {
+      rl.close();
+      resolve(answer.trim() || defaultValue || "");
+    });
+  });
+}
+
+/**
+ * Prompt for yes/no
+ */
+async function confirm(question: string, defaultYes = true): Promise<boolean> {
+  const hint = defaultYes ? "[Y/n]" : "[y/N]";
+  const answer = await prompt(`${question} ${hint}`, defaultYes ? "y" : "n");
+  return answer.toLowerCase().startsWith("y");
+}
+
+/**
+ * Create or update .env file
+ */
+function ensureEnvFile(): void {
+  const envPath = join(PROJECT_ROOT, ".env");
+  const examplePath = join(PROJECT_ROOT, ".env.example");
+
+  if (!existsSync(envPath)) {
+    if (existsSync(examplePath)) {
+      const content = readFileSync(examplePath, "utf-8");
+      writeFileSync(envPath, content);
+      console.log(chalk.green("✓ Created .env from template"));
+    } else {
+      writeFileSync(
+        envPath,
+        `# Donut CLI Configuration
+# Generated by 'donut setup'
+
+# Required: Anthropic API Key
+ANTHROPIC_API_KEY=
+
+# Optional: Backend URLs
+HUMMINGBOT_URL=
+NOFX_API_URL=
+
+# Settings
+LOG_LEVEL=info
+SESSION_DIR=.sessions
+`
+      );
+      console.log(chalk.green("✓ Created .env file"));
+    }
+  }
+}
+
+/**
+ * Update a value in .env file
+ */
+function updateEnvValue(key: string, value: string): void {
+  const envPath = join(PROJECT_ROOT, ".env");
+  let content = readFileSync(envPath, "utf-8");
+
+  const regex = new RegExp(`^${key}=.*$`, "m");
+  if (regex.test(content)) {
+    content = content.replace(regex, `${key}=${value}`);
+  } else {
+    content += `\n${key}=${value}`;
+  }
+
+  writeFileSync(envPath, content);
+}
+
+/**
+ * Validate API key by making a test request
+ */
+async function validateApiKey(apiKey: string): Promise<boolean> {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-3-haiku-20240307",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    return response.ok || response.status === 400; // 400 means key is valid but request is malformed (ok for validation)
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Run interactive setup wizard
+ */
+async function runSetupWizard(): Promise<void> {
+  console.log(chalk.cyan("\n╔══════════════════════════════════════════════════╗"));
+  console.log(chalk.cyan("║          Donut CLI Setup Wizard                   ║"));
+  console.log(chalk.cyan("╚══════════════════════════════════════════════════╝\n"));
+
+  const status = checkStatus();
+
+  // Step 1: Create .env if needed
+  console.log(chalk.bold("Step 1: Environment Configuration\n"));
+
+  if (!status.envExists) {
+    ensureEnvFile();
+  } else {
+    console.log(chalk.green("✓ .env file exists"));
+  }
+
+  // Step 2: Configure API key
+  console.log(chalk.bold("\nStep 2: API Key Configuration\n"));
+
+  if (!status.apiKeyConfigured) {
+    console.log(chalk.yellow("An Anthropic API key is required for AI features."));
+    console.log(chalk.gray("Get one at: https://console.anthropic.com/settings/keys\n"));
+
+    const apiKey = await prompt("Enter your API key (or press Enter to skip)");
+
+    if (apiKey && apiKey.startsWith("sk-ant-")) {
+      console.log(chalk.gray("\nValidating API key..."));
+      const isValid = await validateApiKey(apiKey);
+
+      if (isValid) {
+        updateEnvValue("ANTHROPIC_API_KEY", apiKey);
+        console.log(chalk.green("✓ API key validated and saved"));
+      } else {
+        console.log(chalk.yellow("! Could not validate key (network issue?), saving anyway"));
+        updateEnvValue("ANTHROPIC_API_KEY", apiKey);
+      }
+    } else if (apiKey) {
+      console.log(chalk.red("Invalid key format. Keys start with 'sk-ant-'"));
+    } else {
+      console.log(chalk.gray("Skipped. Demo mode will still work."));
+    }
+  } else {
+    console.log(chalk.green("✓ API key already configured"));
+  }
+
+  // Step 3: Optional backends
+  console.log(chalk.bold("\nStep 3: Backend Configuration (Optional)\n"));
+  console.log(chalk.gray("Backends enable live trading and backtesting features."));
+  console.log(chalk.gray("Skip this if you're just exploring.\n"));
+
+  const configureBackends = await confirm("Configure backend URLs?", false);
+
+  if (configureBackends) {
+    console.log(chalk.gray("\nLeave blank to skip each backend.\n"));
+
+    const hummingbotUrl = await prompt(
+      "Hummingbot Dashboard URL",
+      status.backendsConfigured.hummingbot ? undefined : ""
+    );
+    if (hummingbotUrl) {
+      updateEnvValue("HUMMINGBOT_URL", hummingbotUrl);
+      console.log(chalk.green("✓ Hummingbot URL configured"));
+    }
+
+    const nofxUrl = await prompt(
+      "nofx Backtest Server URL",
+      status.backendsConfigured.nofx ? undefined : ""
+    );
+    if (nofxUrl) {
+      updateEnvValue("NOFX_API_URL", nofxUrl);
+      console.log(chalk.green("✓ nofx URL configured"));
+    }
+  }
+
+  // Step 4: Build if needed
+  console.log(chalk.bold("\nStep 4: Build Project\n"));
+
+  if (!status.buildExists) {
+    const shouldBuild = await confirm("Build the project now?", true);
+
+    if (shouldBuild) {
+      console.log(chalk.gray("\nBuilding..."));
+      try {
+        const buildCmd = status.bunVersion ? "bun run build" : "npm run build";
+        execSync(buildCmd, { cwd: PROJECT_ROOT, stdio: "inherit" });
+        console.log(chalk.green("\n✓ Build complete"));
+      } catch {
+        console.log(chalk.red("\n✗ Build failed. Run 'bun run build' manually."));
+      }
+    }
+  } else {
+    console.log(chalk.green("✓ Project already built"));
+  }
+
+  // Step 5: Global installation
+  console.log(chalk.bold("\nStep 5: Global CLI Installation\n"));
+
+  if (!status.globallyLinked) {
+    const shouldLink = await confirm("Install 'donut' command globally?", true);
+
+    if (shouldLink) {
+      try {
+        execSync("npm link", { cwd: PROJECT_ROOT, stdio: "inherit" });
+        console.log(chalk.green("\n✓ 'donut' command installed globally"));
+      } catch {
+        console.log(chalk.yellow("\n! Failed to link. Try 'sudo npm link' manually."));
+      }
+    }
+  } else {
+    console.log(chalk.green("✓ 'donut' command already available"));
+  }
+
+  // Complete
+  console.log(chalk.bold.green("\n✨ Setup Complete!\n"));
+  console.log(chalk.gray("─".repeat(50)));
+  console.log(chalk.bold("\nQuick Start:"));
+  console.log(`  ${chalk.cyan("donut demo tour")}     Interactive demo`);
+  console.log(`  ${chalk.cyan("donut chat")}          AI chat mode`);
+  console.log(`  ${chalk.cyan("donut paper start")}   Start paper trading`);
+  console.log();
+}
+
+/**
+ * Register setup commands on the program
+ */
+export function registerSetupCommands(program: Command): void {
+  const setup = program
+    .command("setup")
+    .description("First-run setup wizard and configuration");
+
+  setup
+    .command("wizard", { isDefault: true })
+    .description("Run interactive setup wizard")
+    .action(async () => {
+      await runSetupWizard();
+    });
+
+  setup
+    .command("status")
+    .description("Check current setup status")
+    .action(() => {
+      const status = checkStatus();
+      printStatus(status);
+
+      // Provide next steps
+      if (!status.apiKeyConfigured) {
+        console.log(chalk.yellow("\nNext step: Configure your API key"));
+        console.log(chalk.gray("  Run: donut setup wizard"));
+        console.log(
+          chalk.gray("  Or manually add ANTHROPIC_API_KEY to .env")
+        );
+      } else if (!status.buildExists) {
+        console.log(chalk.yellow("\nNext step: Build the project"));
+        console.log(chalk.gray("  Run: bun run build"));
+      } else {
+        console.log(chalk.green("\n✓ Ready to use! Try 'donut demo tour'"));
+      }
+    });
+
+  setup
+    .command("env")
+    .description("Create .env file from template")
+    .action(() => {
+      ensureEnvFile();
+      console.log(chalk.green("\n✓ .env file ready"));
+      console.log(chalk.gray("\nEdit .env to add your ANTHROPIC_API_KEY"));
+    });
+
+  setup
+    .command("validate")
+    .description("Validate API key and configuration")
+    .action(async () => {
+      const status = checkStatus();
+
+      if (!status.apiKeyConfigured) {
+        console.log(chalk.red("\n✗ No API key configured in .env"));
+        return;
+      }
+
+      console.log(chalk.gray("\nValidating API key..."));
+
+      const envContent = readFileSync(join(PROJECT_ROOT, ".env"), "utf-8");
+      const match = envContent.match(/^ANTHROPIC_API_KEY=(.+)$/m);
+
+      if (match && match[1]) {
+        const isValid = await validateApiKey(match[1]);
+        if (isValid) {
+          console.log(chalk.green("✓ API key is valid"));
+        } else {
+          console.log(chalk.red("✗ API key validation failed"));
+          console.log(chalk.gray("  Check your key at: https://console.anthropic.com/"));
+        }
+      }
+    });
+}

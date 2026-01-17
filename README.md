@@ -28,34 +28,60 @@ AI-powered crypto trading terminal with multi-agent orchestration powered by the
 
 ## Quick Start
 
-**1. Clone and install:**
+### One-Liner Install (Recommended)
+
 ```bash
+curl -fsSL https://raw.githubusercontent.com/chris-donut/donut-cli/main/scripts/setup.sh | bash
+```
+
+This script will:
+- Check dependencies (Node.js, Bun)
+- Clone the repository
+- Install packages
+- Guide you through configuration
+- Build and optionally link globally
+
+### Manual Installation
+
+```bash
+# Clone and install
 git clone https://github.com/chris-donut/donut-cli.git
 cd donut-cli
 bun install
-```
 
-**2. Configure environment:**
-```bash
-cp .env.example .env
-```
-Then edit `.env` and add your `ANTHROPIC_API_KEY=sk-ant-...`
-
-**3. Build:**
-```bash
+# Build and run setup wizard
 bun run build
+node dist/index.js setup
 ```
 
-**4. Try it out:**
-```bash
-# Demo mode (no API key needed)
-node dist/index.js demo tour
+### Try Without API Key
 
-# Interactive chat mode
+Demo mode works without any configuration:
+
+```bash
+node dist/index.js demo tour
+```
+
+### Full Setup
+
+For AI features, add your [Anthropic API key](https://console.anthropic.com/settings/keys):
+
+```bash
+# Interactive setup (recommended)
+node dist/index.js setup
+
+# Or manual setup
+cp .env.example .env
+# Edit .env and add: ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Then start chatting:
+
+```bash
 node dist/index.js chat
 ```
 
-> **Note:** To use the `donut` command globally, run `npm link` after building.
+> **Tip:** Run `npm link` to use the `donut` command globally instead of `node dist/index.js`.
 
 ## Installation
 
@@ -126,6 +152,7 @@ donut demo trades
 
 | Command | Description |
 |---------|-------------|
+| `donut setup` | First-run setup wizard |
 | `donut chat` | Interactive AI chat mode |
 | `donut start` | Start a new trading session |
 | `donut status` | Show session status |
