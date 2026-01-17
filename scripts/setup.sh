@@ -280,7 +280,5 @@ main() {
     print_next_steps
 }
 
-# Run if executed directly (not sourced)
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
+# Run main - works both when executed directly and when piped
+main "$@"
