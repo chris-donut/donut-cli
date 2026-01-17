@@ -42,7 +42,7 @@ describe("Custom Error Classes", () => {
     it("should preserve cause error", () => {
       const cause = new Error("Original error");
       const error = new DonutError("Wrapped error", { cause });
-      expect(error.cause).toBe(cause);
+      expect(error.originalCause).toBe(cause);
     });
   });
 

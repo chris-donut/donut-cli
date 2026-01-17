@@ -28,25 +28,34 @@ AI-powered crypto trading terminal with multi-agent orchestration powered by the
 
 ## Quick Start
 
+**1. Clone and install:**
 ```bash
-# Install
-git clone https://github.com/your-org/donut-cli.git
+git clone https://github.com/chris-donut/donut-cli.git
 cd donut-cli
 bun install
-
-# Configure
-cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
-
-# Build
-bun run build
-
-# Try demo mode (no API key needed)
-donut demo tour
-
-# Start interactive mode
-donut chat
 ```
+
+**2. Configure environment:**
+```bash
+cp .env.example .env
+```
+Then edit `.env` and add your `ANTHROPIC_API_KEY=sk-ant-...`
+
+**3. Build:**
+```bash
+bun run build
+```
+
+**4. Try it out:**
+```bash
+# Demo mode (no API key needed)
+node dist/index.js demo tour
+
+# Interactive chat mode
+node dist/index.js chat
+```
+
+> **Note:** To use the `donut` command globally, run `npm link` after building.
 
 ## Installation
 
