@@ -334,7 +334,7 @@ export class ConfigManager {
       terminal.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
     }
     if (process.env.CLAUDE_MODEL) {
-      terminal.model = process.env.CLAUDE_MODEL;
+      terminal.model = process.env.CLAUDE_MODEL as "sonnet" | "opus" | "haiku";
     }
     if (process.env.MAX_TURNS) {
       terminal.maxTurns = parseInt(process.env.MAX_TURNS, 10);
@@ -364,7 +364,7 @@ export class ConfigManager {
       terminal.sessionDir = process.env.SESSION_DIR;
     }
     if (process.env.LOG_LEVEL) {
-      terminal.logLevel = process.env.LOG_LEVEL;
+      terminal.logLevel = process.env.LOG_LEVEL as "debug" | "info" | "warn" | "error";
     }
 
     // Risk config

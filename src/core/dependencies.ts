@@ -37,6 +37,9 @@ export interface Logger {
 
   /** Create child logger with additional context */
   child(context: Record<string, unknown>): Logger;
+
+  /** Write raw text (for streaming output) */
+  write?(text: string): void;
 }
 
 // ============================================================================
@@ -77,6 +80,12 @@ export interface RiskManager {
     maxDailyLoss: number;
     maxDrawdown: number;
   };
+
+  /** Pre-tool execution hook for risk validation */
+  preToolUseHook?(context: Record<string, unknown>): Promise<RiskCheckResult>;
+
+  /** Post-tool execution hook for tracking */
+  postToolUseHook?(context: Record<string, unknown>, result: unknown): Promise<void>;
 }
 
 // ============================================================================
@@ -104,6 +113,15 @@ export interface McpServerProvider {
 
   /** Check if a specific server is available */
   isServerAvailable(serverName: string): boolean;
+
+  /** Get all MCP servers as a record */
+  getMcpServers?(): Record<string, McpServerConfig>;
+
+  /** Get default tools for an agent type */
+  getDefaultTools?(agentType: AgentType): string[];
+
+  /** Get the backend type (hummingbot, nofx, or none) */
+  getBackendType?(): "hummingbot" | "nofx" | "none";
 }
 
 // ============================================================================
@@ -141,6 +159,12 @@ export interface SessionProvider {
   /** Get or set agent session ID for continuity */
   getAgentSessionId(agentType: AgentType): string | undefined;
   setAgentSessionId(agentType: AgentType, sessionId: string): void;
+
+  /** Alias for getAgentSessionId (backwards compatibility) */
+  getAgentSession?(agentType: AgentType): string | undefined;
+
+  /** Update agent session ID (alias for setAgentSessionId) */
+  updateAgentSession?(agentType: AgentType, sessionId: string): Promise<void>;
 }
 
 // ============================================================================

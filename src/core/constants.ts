@@ -49,8 +49,32 @@ export const DEFAULTS = {
   /** Default Claude model to use */
   claudeModel: "sonnet" as const,
 
+  /** Default Claude model (alias for claudeModel) */
+  model: "sonnet" as const,
+
   /** Default maximum agent turns */
   maxAgentTurns: 25,
+
+  /** Default maximum turns (alias) */
+  maxTurns: 25,
+
+  /** Default maximum budget in USD */
+  maxBudgetUsd: 100,
+
+  /** Default Python path */
+  pythonPath: "python3",
+
+  /** Default log level */
+  logLevel: "info" as const,
+
+  /** Default max position size in USD */
+  maxPositionSizeUsd: 10000,
+
+  /** Default max daily loss in USD */
+  maxDailyLossUsd: 1000,
+
+  /** Default max open positions */
+  maxOpenPositions: 10,
 } as const;
 
 // ============================================================================

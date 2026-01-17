@@ -423,7 +423,7 @@ export function createDefaultDependencies(
   return {
     logger: overrides?.logger ?? new ConsoleLogger({}, "info"),
     riskManager: overrides?.riskManager ?? new DefaultRiskManager(),
-    mcpProvider: overrides?.mcpProvider ?? new DefaultMcpServerProvider(terminalConfig),
+    mcpProvider: overrides?.mcpProvider ?? new DefaultMcpServerProvider({}),
     sessionProvider: overrides?.sessionProvider ?? new SessionManagerAdapter(sessionManager),
   };
 }

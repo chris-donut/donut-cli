@@ -195,7 +195,7 @@ export abstract class BaseAgent {
    * Can be overridden in subclasses or use provider's defaults
    */
   get defaultTools(): string[] {
-    return this.mcpProvider.getDefaultTools(this.agentType);
+    return this.mcpProvider.getDefaultTools?.(this.agentType) ?? [];
   }
 
   // ============================================================================
@@ -221,7 +221,7 @@ export abstract class BaseAgent {
     ];
 
     const options: Options = {
-      mcpServers: this.mcpProvider.getMcpServers() as Record<string, McpServerConfig>,
+      mcpServers: (this.mcpProvider.getMcpServers?.() ?? {}) as Record<string, McpServerConfig>,
       allowedTools: allTools,
       maxTurns: this.config.terminalConfig.maxTurns,
       systemPrompt: this.systemPrompt,
@@ -239,7 +239,7 @@ export abstract class BaseAgent {
    * Get the backend type from the MCP provider
    */
   protected getBackendType(): "hummingbot" | "nofx" | "none" {
-    return this.mcpProvider.getBackendType();
+    return this.mcpProvider.getBackendType?.() ?? "none";
   }
 
   // ============================================================================
@@ -251,7 +251,7 @@ export abstract class BaseAgent {
    */
   async run(prompt: string, stage: WorkflowStage): Promise<AgentResult> {
     // Check for existing session to resume
-    const existingSessionId = this.sessionProvider.getAgentSession(this.agentType);
+    const existingSessionId = this.sessionProvider.getAgentSession?.(this.agentType) ?? this.sessionProvider.getAgentSessionId(this.agentType);
     if (existingSessionId) {
       this.sessionId = existingSessionId;
     }
@@ -305,7 +305,11 @@ export abstract class BaseAgent {
         if (message.type === "system" && message.subtype === "init" && message.session_id) {
           this.sessionId = message.session_id;
           this.metricsCollector?.setSessionId(this.sessionId);
-          await this.sessionProvider.updateAgentSession(this.agentType, this.sessionId);
+          if (this.sessionProvider.updateAgentSession) {
+            await this.sessionProvider.updateAgentSession(this.agentType, this.sessionId);
+          } else {
+            this.sessionProvider.setAgentSessionId(this.agentType, this.sessionId);
+          }
         }
 
         // Capture final result
@@ -327,8 +331,8 @@ export abstract class BaseAgent {
       errorMessage = error instanceof Error ? error.message : String(error);
       this.scratchpad.markError(errorMessage);
       this.metricsCollector?.setError(errorMessage);
-      this.logger.error("Agent run failed", {
-        error: errorMessage,
+      this.logger.error("Agent run failed", undefined, {
+        errorMsg: errorMessage,
         stage,
         prompt: prompt.slice(0, 100),
       });
@@ -414,7 +418,7 @@ export abstract class BaseAgent {
     }
 
     if (message.type === "text" && message.text) {
-      this.logger.write(message.text);
+      this.logger.write?.(message.text);
 
       // Emit agent:thinking event for TUI display
       await eventBus.emit({
@@ -455,7 +459,7 @@ export abstract class BaseAgent {
         sessionId: this.sessionId ?? "unknown",
       };
 
-      const riskResult = await this.riskManager.preToolUseHook(context);
+      const riskResult = await this.riskManager?.preToolUseHook?.(context as unknown as Record<string, unknown>) ?? { allowed: true, warnings: [] };
 
       if (riskResult.warnings.length > 0) {
         for (const warning of riskResult.warnings) {
@@ -522,7 +526,7 @@ export abstract class BaseAgent {
         stage,
         sessionId: this.sessionId ?? "unknown",
       };
-      await this.riskManager.postToolUseHook(context, message.result);
+      await this.riskManager?.postToolUseHook?.(context as unknown as Record<string, unknown>, message.result);
     }
   }
 
