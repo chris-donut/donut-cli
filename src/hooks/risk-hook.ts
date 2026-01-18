@@ -4,7 +4,13 @@
  * This hook intercepts trade execution tools (donut_execute_trade, etc.) and
  * validates them against configurable risk limits before execution.
  *
- * Part of Phase 2: Multi-Agent Foundation
+ * Features:
+ * - Position size limits
+ * - Daily loss limits
+ * - Maximum open positions
+ * - Symbol blacklisting
+ * - Circuit breaker for consecutive losses
+ * - Position sync from exchange
  */
 
 import {
@@ -27,6 +33,21 @@ const DEFAULT_RISK_CONFIG: RiskConfig = {
 };
 
 /**
+ * Circuit breaker configuration
+ */
+interface CircuitBreakerConfig {
+  maxConsecutiveLosses: number;
+  cooldownMinutes: number;
+  enabled: boolean;
+}
+
+const DEFAULT_CIRCUIT_BREAKER: CircuitBreakerConfig = {
+  maxConsecutiveLosses: 3,
+  cooldownMinutes: 30,
+  enabled: true,
+};
+
+/**
  * RiskManager - Singleton service for pre/post tool execution validation
  *
  * Provides risk checks for high-risk trading operations including:
@@ -38,11 +59,26 @@ const DEFAULT_RISK_CONFIG: RiskConfig = {
  */
 export class RiskManager {
   private config: RiskConfig;
+  private circuitBreaker: CircuitBreakerConfig;
   private dailyLoss: number = 0;
   private openPositions: number = 0;
   private lastResetDate: string;
 
-  constructor(config: Partial<RiskConfig> = {}) {
+  // Circuit breaker state
+  private consecutiveLosses: number = 0;
+  private circuitBreakerTrippedAt: Date | null = null;
+
+  // Approval tracking
+  private pendingApprovals: Map<string, {
+    context: ToolExecutionContext;
+    createdAt: Date;
+    expiresAt: Date;
+  }> = new Map();
+
+  constructor(
+    config: Partial<RiskConfig> = {},
+    circuitBreakerConfig: Partial<CircuitBreakerConfig> = {}
+  ) {
     // Validate and merge with defaults using Zod
     const parsed = RiskConfigSchema.safeParse({
       ...DEFAULT_RISK_CONFIG,
@@ -55,6 +91,11 @@ export class RiskManager {
       console.warn("Invalid risk config, using defaults:", parsed.error.format());
       this.config = DEFAULT_RISK_CONFIG;
     }
+
+    this.circuitBreaker = {
+      ...DEFAULT_CIRCUIT_BREAKER,
+      ...circuitBreakerConfig,
+    };
 
     this.lastResetDate = new Date().toISOString().split("T")[0];
   }
@@ -79,6 +120,13 @@ export class RiskManager {
       allowed: true,
       warnings: [],
     };
+
+    // Check 0: Circuit breaker
+    const circuitCheck = this.checkCircuitBreaker();
+    if (!circuitCheck.allowed) {
+      return circuitCheck;
+    }
+    result.warnings.push(...circuitCheck.warnings);
 
     // Check 1: Position size limits
     const sizeCheck = this.checkPositionSize(context.params);
@@ -117,9 +165,53 @@ export class RiskManager {
   }
 
   /**
+   * Check circuit breaker status
+   */
+  private checkCircuitBreaker(): RiskCheckResult {
+    if (!this.circuitBreaker.enabled) {
+      return { allowed: true, warnings: [] };
+    }
+
+    // Check if circuit breaker is currently tripped
+    if (this.circuitBreakerTrippedAt) {
+      const cooldownEnd = new Date(
+        this.circuitBreakerTrippedAt.getTime() + this.circuitBreaker.cooldownMinutes * 60 * 1000
+      );
+
+      if (new Date() < cooldownEnd) {
+        const remainingMinutes = Math.ceil((cooldownEnd.getTime() - Date.now()) / 60000);
+        return {
+          allowed: false,
+          reason: `Circuit breaker active after ${this.circuitBreaker.maxConsecutiveLosses} consecutive losses. ` +
+            `Trading disabled for ${remainingMinutes} more minutes.`,
+          warnings: [],
+        };
+      } else {
+        // Cooldown expired, reset circuit breaker
+        this.circuitBreakerTrippedAt = null;
+        this.consecutiveLosses = 0;
+      }
+    }
+
+    // Warn if approaching circuit breaker
+    if (this.consecutiveLosses >= this.circuitBreaker.maxConsecutiveLosses - 1) {
+      return {
+        allowed: true,
+        warnings: [
+          `WARNING: ${this.consecutiveLosses} consecutive losing trades. ` +
+            `One more loss will trigger circuit breaker (${this.circuitBreaker.cooldownMinutes} min cooldown).`,
+        ],
+      };
+    }
+
+    return { allowed: true, warnings: [] };
+  }
+
+  /**
    * Post-tool-use hook: Update risk metrics after execution
    *
    * Updates position count and tracks P&L after successful tool execution.
+   * Also manages circuit breaker state based on consecutive losses.
    */
   async postToolUseHook(
     context: ToolExecutionContext,
@@ -130,9 +222,14 @@ export class RiskManager {
       this.openPositions++;
 
       // Track realized P&L if available in result
-      const result = toolResult as { realizedPnL?: number } | undefined;
-      if (result?.realizedPnL !== undefined && result.realizedPnL < 0) {
-        this.dailyLoss += Math.abs(result.realizedPnL);
+      const result = toolResult as { realizedPnL?: number; success?: boolean } | undefined;
+      if (result?.realizedPnL !== undefined) {
+        if (result.realizedPnL < 0) {
+          this.dailyLoss += Math.abs(result.realizedPnL);
+          this.recordLossTrade();
+        } else if (result.realizedPnL > 0) {
+          this.recordWinTrade();
+        }
       }
     }
 
@@ -140,6 +237,31 @@ export class RiskManager {
     if (context.toolName === "donut_close_all_positions") {
       this.openPositions = 0;
     }
+  }
+
+  /**
+   * Record a losing trade for circuit breaker
+   */
+  private recordLossTrade(): void {
+    this.consecutiveLosses++;
+
+    if (
+      this.circuitBreaker.enabled &&
+      this.consecutiveLosses >= this.circuitBreaker.maxConsecutiveLosses
+    ) {
+      this.circuitBreakerTrippedAt = new Date();
+      console.warn(
+        `[RiskManager] CIRCUIT BREAKER TRIPPED: ${this.consecutiveLosses} consecutive losses. ` +
+          `Trading disabled for ${this.circuitBreaker.cooldownMinutes} minutes.`
+      );
+    }
+  }
+
+  /**
+   * Record a winning trade - resets consecutive losses
+   */
+  private recordWinTrade(): void {
+    this.consecutiveLosses = 0;
   }
 
   /**
@@ -287,6 +409,13 @@ export class RiskManager {
     config: RiskConfig;
     dailyLossRemaining: number;
     positionsRemaining: number;
+    circuitBreaker: {
+      enabled: boolean;
+      tripped: boolean;
+      consecutiveLosses: number;
+      cooldownRemainingMinutes: number | null;
+    };
+    pendingApprovalsCount: number;
   } {
     return {
       dailyLoss: this.dailyLoss,
@@ -294,6 +423,8 @@ export class RiskManager {
       config: { ...this.config },
       dailyLossRemaining: this.config.maxDailyLossUsd - this.dailyLoss,
       positionsRemaining: this.config.maxOpenPositions - this.openPositions,
+      circuitBreaker: this.getCircuitBreakerStatus(),
+      pendingApprovalsCount: this.getPendingApprovals().length,
     };
   }
 
@@ -311,6 +442,150 @@ export class RiskManager {
     if (amount > 0) {
       this.dailyLoss += amount;
     }
+  }
+
+  /**
+   * Sync positions from Donut Browser
+   * Call this periodically to keep risk state accurate
+   */
+  async syncPositions(donutClient: {
+    getPositions(): Promise<Array<{ unrealizedPnL: number }>>;
+  }): Promise<void> {
+    try {
+      const positions = await donutClient.getPositions();
+      this.openPositions = positions.length;
+
+      // Calculate total unrealized P&L for monitoring
+      const totalUnrealizedPnl = positions.reduce(
+        (sum, p) => sum + (p.unrealizedPnL ?? 0),
+        0
+      );
+
+      console.log(
+        `[RiskManager] Synced ${positions.length} positions, unrealized P&L: $${totalUnrealizedPnl.toFixed(2)}`
+      );
+    } catch (error) {
+      console.error("[RiskManager] Failed to sync positions:", error);
+    }
+  }
+
+  /**
+   * Create an approval request for a high-risk trade
+   */
+  createApprovalRequest(
+    context: ToolExecutionContext,
+    expiresInSeconds: number = 60
+  ): string {
+    const requestId = `approval_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const now = new Date();
+
+    this.pendingApprovals.set(requestId, {
+      context,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + expiresInSeconds * 1000),
+    });
+
+    return requestId;
+  }
+
+  /**
+   * Check and approve a pending request
+   */
+  approveRequest(requestId: string): { approved: boolean; context?: ToolExecutionContext; error?: string } {
+    const request = this.pendingApprovals.get(requestId);
+
+    if (!request) {
+      return { approved: false, error: "Request not found" };
+    }
+
+    if (new Date() > request.expiresAt) {
+      this.pendingApprovals.delete(requestId);
+      return { approved: false, error: "Request expired" };
+    }
+
+    this.pendingApprovals.delete(requestId);
+    return { approved: true, context: request.context };
+  }
+
+  /**
+   * Reject a pending request
+   */
+  rejectRequest(requestId: string): boolean {
+    return this.pendingApprovals.delete(requestId);
+  }
+
+  /**
+   * Get all pending approval requests
+   */
+  getPendingApprovals(): Array<{
+    requestId: string;
+    toolName: string;
+    params: Record<string, unknown>;
+    createdAt: Date;
+    expiresAt: Date;
+  }> {
+    const now = new Date();
+    const pending: Array<{
+      requestId: string;
+      toolName: string;
+      params: Record<string, unknown>;
+      createdAt: Date;
+      expiresAt: Date;
+    }> = [];
+
+    for (const [requestId, request] of this.pendingApprovals) {
+      if (now < request.expiresAt) {
+        pending.push({
+          requestId,
+          toolName: request.context.toolName,
+          params: request.context.params,
+          createdAt: request.createdAt,
+          expiresAt: request.expiresAt,
+        });
+      } else {
+        // Clean up expired
+        this.pendingApprovals.delete(requestId);
+      }
+    }
+
+    return pending;
+  }
+
+  /**
+   * Get circuit breaker status
+   */
+  getCircuitBreakerStatus(): {
+    enabled: boolean;
+    tripped: boolean;
+    consecutiveLosses: number;
+    cooldownRemainingMinutes: number | null;
+  } {
+    let cooldownRemaining: number | null = null;
+
+    if (this.circuitBreakerTrippedAt) {
+      const cooldownEnd = new Date(
+        this.circuitBreakerTrippedAt.getTime() + this.circuitBreaker.cooldownMinutes * 60 * 1000
+      );
+      if (new Date() < cooldownEnd) {
+        cooldownRemaining = Math.ceil((cooldownEnd.getTime() - Date.now()) / 60000);
+      }
+    }
+
+    return {
+      enabled: this.circuitBreaker.enabled,
+      tripped: this.circuitBreakerTrippedAt !== null && cooldownRemaining !== null,
+      consecutiveLosses: this.consecutiveLosses,
+      cooldownRemainingMinutes: cooldownRemaining,
+    };
+  }
+
+  /**
+   * Reset circuit breaker manually (emergency override)
+   */
+  resetCircuitBreaker(): void {
+    this.circuitBreakerTrippedAt = null;
+    this.consecutiveLosses = 0;
+    console.log("[RiskManager] Circuit breaker manually reset");
   }
 }
 

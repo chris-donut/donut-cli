@@ -11,6 +11,9 @@ export { registerNotificationCommands } from "./commands/notifications.js";
 export { registerDemoCommands } from "./commands/demo.js";
 export { registerStrategyCommands } from "./commands/strategy.js";
 export { registerBacktestCommands } from "./commands/backtest.js";
+export { registerApproveCommands } from "./commands/approve.js";
+export { registerAutoTradeCommands } from "./commands/auto-trade.js";
+export { registerMonitorCommands } from "./commands/monitor.js";
 
 // Theme exports (for use in other command modules)
 export {

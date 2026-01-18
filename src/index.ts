@@ -21,6 +21,9 @@ import {
   registerDemoCommands,
   registerStrategyCommands,
   registerBacktestCommands,
+  registerApproveCommands,
+  registerAutoTradeCommands,
+  registerMonitorCommands,
   BANNER,
 } from "./cli/index.js";
 import { startInteractiveMode } from "./tui/index.js";
@@ -45,6 +48,9 @@ registerBacktestCommands(program);
 registerPaperTradingCommands(program);
 registerNotificationCommands(program);
 registerDemoCommands(program);
+registerApproveCommands(program);
+registerAutoTradeCommands(program);
+registerMonitorCommands(program);
 
 // ============================================================================
 // Interactive Mode

@@ -491,7 +491,8 @@ export interface ToolPermission {
 export const TOOL_PERMISSIONS: Record<WorkflowStage, ToolPermission[]> = {
   [WorkflowStage.DISCOVERY]: [
     { tool: "strategy_list", mode: "read" },
-    { tool: "strategy_get", mode: "read" },
+    { tool: "strategy_load", mode: "read" },
+    { tool: "strategy_versions", mode: "read" },
     { tool: "backtest_list_runs", mode: "read" },
     { tool: "backtest_get_metrics", mode: "read" },
     { tool: "donut_get_positions", mode: "read" },
@@ -499,11 +500,13 @@ export const TOOL_PERMISSIONS: Record<WorkflowStage, ToolPermission[]> = {
   ],
   [WorkflowStage.STRATEGY_BUILD]: [
     { tool: "strategy_list", mode: "read" },
-    { tool: "strategy_get", mode: "read" },
+    { tool: "strategy_load", mode: "read" },
+    { tool: "strategy_save", mode: "write" },
+    { tool: "strategy_delete", mode: "write" },
+    { tool: "strategy_versions", mode: "read" },
+    { tool: "strategy_rollback", mode: "write" },
     { tool: "strategy_validate", mode: "read" },
     { tool: "strategy_preview_prompt", mode: "read" },
-    { tool: "strategy_create", mode: "write" },
-    { tool: "strategy_update", mode: "write" },
   ],
   [WorkflowStage.BACKTEST]: [
     { tool: "backtest_start", mode: "write" },
@@ -533,7 +536,8 @@ export const TOOL_PERMISSIONS: Record<WorkflowStage, ToolPermission[]> = {
   ],
   [WorkflowStage.REVIEW]: [
     { tool: "strategy_list", mode: "read" },
-    { tool: "strategy_get", mode: "read" },
+    { tool: "strategy_load", mode: "read" },
+    { tool: "strategy_versions", mode: "read" },
     { tool: "backtest_get_metrics", mode: "read" },
     { tool: "backtest_list_runs", mode: "read" },
     { tool: "donut_get_positions", mode: "read" },

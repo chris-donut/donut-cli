@@ -456,6 +456,70 @@ export async function requestApprovalAndWait(
 }
 
 /**
+ * Send a notification for risk manager events
+ */
+export async function sendRiskAlert(
+  config: TelegramClientConfig,
+  alertType: "circuit_breaker" | "daily_loss_limit" | "position_limit" | "approval_needed",
+  details: Record<string, unknown>
+): Promise<{ success: boolean; error?: string }> {
+  let message: string;
+
+  switch (alertType) {
+    case "circuit_breaker":
+      message = `
+<b>🛑 CIRCUIT BREAKER TRIPPED</b>
+
+Trading has been automatically disabled after ${details.consecutiveLosses} consecutive losing trades.
+
+⏱ Cooldown: ${details.cooldownMinutes} minutes
+🔄 Trading will resume at: ${details.resumeTime}
+      `.trim();
+      break;
+
+    case "daily_loss_limit":
+      message = `
+<b>⚠️ DAILY LOSS LIMIT REACHED</b>
+
+Loss: $${Number(details.dailyLoss).toFixed(2)}
+Limit: $${Number(details.maxDailyLoss).toFixed(2)}
+
+Trading is blocked for the rest of the day.
+      `.trim();
+      break;
+
+    case "position_limit":
+      message = `
+<b>⚠️ POSITION LIMIT REACHED</b>
+
+Open Positions: ${details.currentPositions}
+Max Allowed: ${details.maxPositions}
+
+Close a position before opening new ones.
+      `.trim();
+      break;
+
+    case "approval_needed":
+      message = `
+<b>🔔 Trade Approval Needed</b>
+
+Symbol: ${details.symbol}
+Side: ${details.side}
+Size: ${details.quantity}
+Leverage: ${details.leverage}x
+
+Reply with /approve ${details.requestId} or /reject ${details.requestId}
+      `.trim();
+      break;
+
+    default:
+      message = `Risk alert: ${JSON.stringify(details)}`;
+  }
+
+  return sendMessage(config, message);
+}
+
+/**
  * Format a notification message for different event types
  */
 export function formatNotification(
