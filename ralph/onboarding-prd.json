@@ -1,98 +1,71 @@
 {
-  "project": "User Onboarding Improvements",
-  "branchName": "ralph/user-onboarding",
-  "description": "Improve DOnut CLI onboarding by adding first-run detection, banner hints, demo-to-real transitions, and interactive wizards to achieve >50% demo-to-real conversion.",
+  "project": "Onboarding Auto-Launch Flow",
+  "branchName": "ralph/onboarding-auto-launch",
+  "description": "Fix confusing donut start flow - auto-launch interactive mode after session creation so users reach first strategy in <30 seconds.",
   "userStories": [
     {
-      "id": "UO-001",
-      "title": "First-Run Detection",
-      "description": "As a new user, I want the CLI to detect this is my first time and guide me, so that I know what to do without reading documentation.",
+      "id": "OALF-001",
+      "title": "Auto-prompt after session creation",
+      "description": "As a new user, I want to be prompted to continue after donut start so that I don't have to figure out what command to run next.",
       "acceptanceCriteria": [
-        "Detect first run when .env missing or ANTHROPIC_API_KEY not set",
-        "Skip detection if user ran donut demo, donut setup, --help, or --version",
-        "Show welcome screen with 3 options: Demo, Setup, Skip",
-        "Route to demo tour when user selects option 1",
-        "Route to setup wizard when user selects option 2",
-        "Show helpful tip and continue when user selects skip",
+        "After session creation success message, show prompt: 'Press Enter to build your first strategy (or Ctrl+C to exit)'",
+        "Pressing Enter launches interactive chat mode (startInteractiveMode())",
+        "Pressing Ctrl+C exits cleanly without error message",
+        "Prompt only appears when NOT using --demo flag",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Modify src/index.ts - add isFirstRun() and showFirstRunWelcome() functions, intercept before program.parse()"
+      "passes": true,
+      "notes": "Implemented promptContinue() helper. After session creation, shows 'Press Enter to build your first strategy (or Ctrl+C to exit)' and launches startInteractiveMode() on Enter."
     },
     {
-      "id": "UO-002",
-      "title": "Banner Quick Start Hints",
-      "description": "As a new user, I want to see available commands at a glance, so that I can start using the CLI without memorizing documentation.",
+      "id": "OALF-002",
+      "title": "Skip prompt when goal is provided",
+      "description": "As a user who provides a goal via --goal flag, I want the system to auto-launch strategy building so that I reach my strategy faster.",
       "acceptanceCriteria": [
-        "Create BANNER_WITH_HINTS constant in theme.ts",
-        "Show hints for: donut demo tour, donut setup, donut chat, donut --help",
-        "Display hints banner on first run and bare donut command",
-        "Keep original banner for interactive modes (chat, paper trading)",
+        "donut start --goal 'momentum strategy on SOL' skips the Enter prompt",
+        "Auto-launches interactive mode with the goal pre-loaded as first message",
+        "Goal is displayed before entering chat mode",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Modify src/cli/theme.ts - add BANNER_WITH_HINTS and getBanner() helper"
+      "passes": true,
+      "notes": "When --goal flag is provided, displays goal and auto-launches startInteractiveMode() without requiring Enter prompt."
     },
     {
-      "id": "UO-003",
-      "title": "Setup Wizard Post-Completion Guidance",
-      "description": "As a user completing setup, I want clear next steps, so that I know what to do after configuration.",
+      "id": "OALF-003",
+      "title": "Auto-resume recent session",
+      "description": "As a returning user, I want to be offered to resume my recent session so that I don't lose my progress.",
       "acceptanceCriteria": [
-        "Show contextual next steps based on what was configured",
-        "If API key configured: suggest demo tour → chat → backtest progression",
-        "If no API key: suggest demo mode with link to get API key",
-        "Offer to start demo tour immediately after setup completion",
-        "Export runSetupWizard() function for import from other modules",
+        "On donut start, check for sessions updated within last 1 hour",
+        "If recent session exists, prompt: 'Resume session [id]? (Y/n)'",
+        "Pressing Enter or Y resumes the session and enters chat mode",
+        "Pressing N creates a new session as normal",
+        "Display session age and current stage in the prompt",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Modify src/cli/commands/setup.ts - enhance completion section around line 402-408"
+      "passes": true,
+      "notes": "Added findRecentSession() helper. Checks for sessions < 1 hour old, shows age/stage, prompts 'Resume this session? (Y/n)'. Y resumes and launches interactive mode, N creates new session."
     },
     {
-      "id": "UO-004",
-      "title": "Demo-to-Real Transition Prompts",
-      "description": "As a user completing a demo scenario, I want guidance on trying real features, so that I convert from demo exploration to actual usage.",
+      "id": "OALF-004",
+      "title": "Graceful API key error with recovery path",
+      "description": "As a user without an API key configured, I want a clear error with immediate recovery option so that I can fix it without googling.",
       "acceptanceCriteria": [
-        "Show transition prompt after each scenario completion",
-        "If no API key: offer Setup wizard vs Continue demos",
-        "If has API key: suggest context-specific real command based on scenario",
-        "getting-started scenario suggests donut chat",
-        "strategy-basics scenario suggests donut strategy build",
-        "backtest-workflow scenario suggests donut backtest run",
-        "trade-analysis scenario suggests donut paper start",
-        "full-workflow scenario suggests donut chat",
-        "Preserve existing navigation (menu, quit) as fallback options",
+        "When ANTHROPIC_API_KEY is missing, show actionable error",
+        "Offer: 'Run setup wizard now? (Y/n)'",
+        "Pressing Y launches runSetupWizard() directly",
+        "Pressing N shows manual instructions and exits",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Modify src/demo/tutorial-engine.ts - add showTransitionPrompt() after scenario completion"
-    },
-    {
-      "id": "UO-005",
-      "title": "Interactive Backtest Wizard",
-      "description": "As a user wanting to run a backtest, I want a guided wizard when I don't know the flags, so that I can run my first backtest without reading help text.",
-      "acceptanceCriteria": [
-        "Detect when donut backtest run called with no flags",
-        "Launch interactive wizard with 3 steps: Symbols, Time Range, Balance",
-        "Symbols step: show popular options (BTCUSDT, ETHUSDT), accept comma-separated input",
-        "Time Range step: offer presets (7/30/90 days) or custom timestamps",
-        "Balance step: default to $10000, accept custom amount",
-        "Show summary and confirmation before running backtest",
-        "Preserve flag-based interface for scripting (don't break existing usage)",
-        "Typecheck passes",
-        "Lint passes"
-      ],
-      "priority": 5,
-      "passes": false,
-      "notes": "Modify src/cli/commands/backtest.ts - add runBacktestWizard() function, detect no-flags invocation in action handler"
+      "passes": true,
+      "notes": "On API key validation error, shows clear message and promptYesNo() for 'Run setup wizard now?'. Y launches runSetupWizard(), N shows manual instructions with Anthropic console URL."
     }
   ]
 }

@@ -5,10 +5,84 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+import { createInterface } from "readline";
 import { loadConfig, validateApiKeys } from "../../core/config.js";
 import { SessionManager } from "../../core/session.js";
 import { logError } from "../../core/errors.js";
 import { BANNER, DEMO_BANNER, DEMO_INDICATOR } from "../theme.js";
+import { startInteractiveMode } from "../../tui/index.js";
+import { runSetupWizard } from "./setup.js";
+
+/**
+ * Prompt user with a yes/no question
+ */
+async function promptYesNo(question: string, defaultYes = true): Promise<boolean> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    const hint = defaultYes ? "(Y/n)" : "(y/N)";
+    rl.question(`${question} ${chalk.gray(hint)} `, (answer) => {
+      rl.close();
+      const response = answer.trim().toLowerCase();
+      if (response === "") {
+        resolve(defaultYes);
+      } else {
+        resolve(response === "y" || response === "yes");
+      }
+    });
+  });
+}
+
+/**
+ * Prompt user to press Enter to continue
+ */
+async function promptContinue(message: string): Promise<void> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(`${message} `, () => {
+      rl.close();
+      resolve();
+    });
+  });
+}
+
+/**
+ * Find the most recent session updated within the given time window
+ */
+async function findRecentSession(
+  sessionManager: SessionManager,
+  maxAgeMs: number
+): Promise<{ sessionId: string; stage: string; ageMinutes: number } | null> {
+  const sessions = await sessionManager.listSessions();
+  if (sessions.length === 0) return null;
+
+  // Check most recent session
+  const lastSessionId = sessions[sessions.length - 1];
+  try {
+    await sessionManager.loadSession(lastSessionId);
+    const state = sessionManager.getState();
+    if (!state) return null;
+
+    const ageMs = Date.now() - state.updatedAt.getTime();
+    if (ageMs < maxAgeMs) {
+      return {
+        sessionId: lastSessionId,
+        stage: state.currentStage || "DISCOVERY",
+        ageMinutes: Math.round(ageMs / 60000),
+      };
+    }
+  } catch {
+    // Session corrupted, skip
+  }
+  return null;
+}
 
 /**
  * Register session commands on the program
@@ -42,26 +116,57 @@ export function registerSessionCommands(program: Command): void {
 
       console.log(BANNER);
 
+      // OALF-004: Graceful API key error with recovery path
       let config;
       try {
         config = loadConfig();
         validateApiKeys(config);
       } catch (error) {
-        logError(error);
-        console.log(
-          chalk.gray(
-            "\nTip: Set ANTHROPIC_API_KEY in your environment or .env file"
-          )
-        );
-        console.log(
-          chalk.gray(
-            "     Run in demo mode with: donut start --demo"
-          )
-        );
+        console.log(chalk.red("\n⚠ ANTHROPIC_API_KEY not configured\n"));
+        console.log(chalk.gray("An API key is required to use Claude AI features."));
+        console.log();
+
+        const runSetup = await promptYesNo("Run setup wizard now?", true);
+        if (runSetup) {
+          await runSetupWizard();
+          return;
+        }
+
+        console.log();
+        console.log(chalk.gray("To set up manually:"));
+        console.log(chalk.gray("  1. Get your API key from: https://console.anthropic.com"));
+        console.log(chalk.gray("  2. Run: export ANTHROPIC_API_KEY=sk-ant-..."));
+        console.log(chalk.gray("  Or run: donut setup"));
         process.exit(1);
       }
 
       const sessionManager = new SessionManager(config.sessionDir);
+
+      // OALF-003: Auto-resume recent session (within 1 hour)
+      const ONE_HOUR_MS = 60 * 60 * 1000;
+      const recentSession = await findRecentSession(sessionManager, ONE_HOUR_MS);
+
+      if (recentSession) {
+        console.log();
+        console.log(
+          chalk.yellow(`Found recent session from ${recentSession.ageMinutes} minutes ago`)
+        );
+        console.log(
+          chalk.gray(`  Stage: ${recentSession.stage} | ID: ${recentSession.sessionId.slice(0, 12)}...`)
+        );
+        console.log();
+
+        const shouldResume = await promptYesNo("Resume this session?", true);
+        if (shouldResume) {
+          await sessionManager.loadSession(recentSession.sessionId);
+          console.log(chalk.green(`\n✓ Session resumed: ${recentSession.sessionId.slice(0, 12)}...\n`));
+
+          // Auto-launch interactive mode
+          await startInteractiveMode();
+          return;
+        }
+        console.log(chalk.gray("\nCreating new session instead...\n"));
+      }
 
       // Create new session
       const spinner = ora("Creating new session...").start();
@@ -77,17 +182,28 @@ export function registerSessionCommands(program: Command): void {
           chalk.yellow(state?.currentStage || "DISCOVERY")
         );
 
+        // OALF-002: Skip prompt when goal is provided
         if (options.goal) {
-          console.log(chalk.gray("Goal:"), options.goal);
-          // Could trigger Strategy Builder here with the goal
+          console.log(chalk.gray("Goal:"), chalk.white(options.goal));
+          console.log();
+          console.log(chalk.green("Launching strategy builder with your goal...\n"));
+
+          // Launch interactive mode - goal will be used as context
+          // The TUI can pick up the goal from session state
+          await startInteractiveMode();
+          return;
         }
 
+        // OALF-001: Auto-prompt after session creation
         console.log();
-        console.log(chalk.gray("Next steps:"));
-        console.log(
-          `  ${chalk.cyan("donut strategy build")} - Build a trading strategy`
+        await promptContinue(
+          chalk.cyan("Press Enter to build your first strategy") +
+            chalk.gray(" (or Ctrl+C to exit)")
         );
-        console.log(`  ${chalk.cyan("donut chat")} - Start interactive mode`);
+
+        // Launch interactive mode
+        console.log();
+        await startInteractiveMode();
       } catch (error) {
         spinner.fail("Failed to create session");
         logError(error);
