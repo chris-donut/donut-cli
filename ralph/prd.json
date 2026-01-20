@@ -108,8 +108,8 @@
         "Lint passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Use viem for EVM transactions. Reuse security patterns from Solana wallet."
+      "passes": true,
+      "notes": "Created src/mcp-external/tools/base-wallet.ts using viem. Implements handleBaseWalletStatus(), getBaseTokenBalance(), getBaseAccountForSigning(). Keys loaded via loadBaseWallet() at execution time only. Supports mainnet and testnet via BASE_TESTNET flag. Added donut_base_balance and donut_wallet_status tools to MCP server. .env.example updated with BASE_PRIVATE_KEY config and security warning."
     },
     {
       "id": "DMCP-007",
@@ -125,8 +125,8 @@
         "Lint passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Unified swap interface across chains. Chain detection based on token address format."
+      "passes": true,
+      "notes": "Created src/mcp-external/tools/base-swap.ts with handleBaseQuote() and handleBaseSwap() using 0x API v1. Implements detectChainFromToken() for base58 vs 0x address detection. Quote includes gasLimit, gasPriceGwei, estimatedCostEth. Same safety pattern: ERC20 approval check, simulateContract before signing, 60s timeout polling, status enum (signed/submitted/confirmed/failed/pending). Added donut_base_quote, donut_base_swap, donut_detect_chain tools to MCP server."
     },
     {
       "id": "DMCP-008",
@@ -140,8 +140,8 @@
         "Lint passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Use hyperliquid npm package. API key stored in .env (HYPERLIQUID_API_KEY, HYPERLIQUID_API_SECRET)."
+      "passes": true,
+      "notes": "Created src/mcp-external/tools/hyperliquid.ts using hyperliquid npm package. Implements handleHLBalance() with wallet address derived from private key via viem. Uses HYPERLIQUID_PRIVATE_KEY env var (same EVM format). Added donut_hl_balance and donut_hl_markets tools to MCP server. .env.example updated with Hyperliquid config."
     },
     {
       "id": "DMCP-009",
@@ -157,8 +157,8 @@
         "Lint passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Show liquidation price upfront. Validate leverage against market maximums."
+      "passes": true,
+      "notes": "Implemented handleHLOpen(), handleHLClose(), handleHLPositions(), handleHLMarkets() in hyperliquid.ts. Uses SDK's order format (coin, is_buy, limit_px, order_type, reduce_only). Market orders use IOC with 0.5% slippage from current mid price. Validates leverage against market maximums from getMeta(). Returns liquidation price from position state after order."
     },
     {
       "id": "DMCP-010",
@@ -173,8 +173,8 @@
         "Lint passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "Polymarket uses USDC on Polygon. May need wallet integration for that chain."
+      "passes": true,
+      "notes": "Created src/mcp-external/tools/polymarket.ts using @polymarket/clob-client SDK. Implements Gamma API for market discovery (searchMarketsGamma, getTrendingMarkets) and CLOB API for trading (handlePMBuy, handlePMSell). Added 6 tools: donut_pm_markets (search/trending), donut_pm_market (details with orderbook), donut_pm_buy (market/limit orders), donut_pm_sell (market/limit orders), donut_pm_orders (list open), donut_pm_cancel (cancel order). Uses Polygon wallet (POLYGON_PRIVATE_KEY) with API credential derivation. Supports GTC (limit) and FOK (market) order types. .env.example updated with Polygon/Polymarket configuration."
     },
     {
       "id": "DMCP-011",
@@ -189,8 +189,8 @@
         "Lint passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Use Neynar API for Farcaster. Optionally add Twitter/X API for CT signals."
+      "passes": true,
+      "notes": "Created src/mcp-external/tools/social-signals.ts using @neynar/nodejs-sdk. Implements handleTrending() (aggregates token mentions from trending Farcaster feed), handleSearchMentions() (searches for specific token mentions with engagement metrics), handleTrendingTopics() (discovers trending topics/narratives). Added 3 tools: donut_trending (filter by limit, minMentions, timeWindow, network), donut_search_mentions (search query with algorithmic/recent sorting), donut_trending_topics. Includes sentiment analysis via keyword matching (bullish/bearish terms), token extraction via $SYMBOL regex patterns, and Warpcast URL construction for source links. .env.example updated with NEYNAR_API_KEY config."
     }
   ]
 }

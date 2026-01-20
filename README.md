@@ -43,39 +43,97 @@ After installing donut-cli, add to your Claude Code settings (`~/.claude/setting
       "env": {
         "ANTHROPIC_API_KEY": "your-key-here",
         "SOLANA_PRIVATE_KEY": "your-base58-private-key",
-        "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com"
+        "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com",
+        "BASE_PRIVATE_KEY": "your-hex-private-key",
+        "HYPERLIQUID_PRIVATE_KEY": "your-hex-private-key",
+        "POLYGON_PRIVATE_KEY": "your-hex-private-key",
+        "NEYNAR_API_KEY": "your-neynar-api-key"
       }
     }
   }
 }
 ```
 
-**Security Note:** Your `SOLANA_PRIVATE_KEY` should be a base58-encoded private key. Never share this key or commit it to version control. The key is only loaded at execution time and is never logged.
+**Security Note:** Private keys should never be shared or committed to version control. Keys are only loaded at execution time and are never logged.
 
 ### Available Tools
 
+#### Strategy & Backtesting
 | Tool | Description |
 |------|-------------|
 | `donut_strategy_build` | Build trading strategies from natural language |
 | `donut_backtest_run` | Run backtests on strategies |
 | `donut_portfolio` | Check portfolio status and positions |
+
+#### Solana (Jupiter)
+| Tool | Description |
+|------|-------------|
 | `donut_balance` | Check Solana wallet status and SOL balance |
 | `donut_quote` | Get a swap quote without executing |
 | `donut_swap` | Execute a token swap on Solana via Jupiter |
 | `donut_search_token` | Search for tokens by name or symbol |
+
+#### Base Chain (0x)
+| Tool | Description |
+|------|-------------|
+| `donut_base_balance` | Check Base wallet status and ETH balance |
+| `donut_base_quote` | Get a swap quote on Base chain |
+| `donut_base_swap` | Execute a token swap on Base via 0x |
+| `donut_detect_chain` | Detect blockchain from token address format |
+| `donut_wallet_status` | Multi-chain wallet status (Solana + Base) |
+
+#### Hyperliquid Perpetuals
+| Tool | Description |
+|------|-------------|
+| `donut_hl_balance` | Check Hyperliquid account balance and positions |
+| `donut_hl_markets` | List available perpetual markets |
+| `donut_hl_open` | Open a leveraged position |
+| `donut_hl_close` | Close a position |
+| `donut_hl_positions` | List open positions with PnL |
+
+#### Polymarket Predictions
+| Tool | Description |
+|------|-------------|
+| `donut_pm_markets` | Search/list prediction markets |
+| `donut_pm_market` | Get detailed market info with orderbook |
+| `donut_pm_buy` | Buy shares on a prediction market |
+| `donut_pm_sell` | Sell shares on a prediction market |
+| `donut_pm_orders` | List open orders |
+| `donut_pm_cancel` | Cancel an open order |
+
+#### Social Signals (Farcaster)
+| Tool | Description |
+|------|-------------|
+| `donut_trending` | Discover trending tokens from Farcaster mentions |
+| `donut_search_mentions` | Search for token/topic mentions |
+| `donut_trending_topics` | Get trending topics/narratives |
 
 ### Example Usage
 
 From Claude Code, you can say:
 
 ```
-"Build me a momentum strategy for SOL"
-"Backtest this strategy for 30 days"
-"Show my current portfolio"
+# Solana
 "Check my Solana wallet balance"
 "Get a quote to swap 1 SOL for USDC"
-"Search for the BONK token"
 "Swap 0.5 SOL to USDC"
+
+# Base
+"Check my Base wallet balance"
+"Swap 0.1 ETH to USDC on Base"
+
+# Hyperliquid
+"Show my Hyperliquid balance"
+"Open a 2x long on BTC with 0.01 BTC"
+"Close my ETH position"
+
+# Polymarket
+"Show trending prediction markets"
+"What are the odds on the election market?"
+
+# Social Signals
+"What tokens are trending on Farcaster?"
+"Search for mentions of $DEGEN"
 ```
 
 See [llms.txt](./llms.txt) for complete documentation.

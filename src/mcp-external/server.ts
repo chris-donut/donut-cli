@@ -20,9 +20,31 @@ import { config as dotenvConfig } from "dotenv";
 import { handleStrategyBuild } from "./tools/strategy-build.js";
 import { handleBacktestRun } from "./tools/backtest-run.js";
 import { handlePortfolio } from "./tools/portfolio.js";
-import { handleWalletStatus } from "./tools/wallet.js";
+import { handleWalletStatus, handleMultiChainWalletStatus } from "./tools/wallet.js";
+import { handleBaseWalletStatus } from "./tools/base-wallet.js";
 import { handleQuote, handleSwap } from "./tools/swap.js";
+import { handleBaseQuote, handleBaseSwap, detectChainFromToken } from "./tools/base-swap.js";
 import { handleTokenSearch } from "./tools/token-search.js";
+import {
+  handleHLBalance,
+  handleHLOpen,
+  handleHLClose,
+  handleHLPositions,
+  handleHLMarkets,
+} from "./tools/hyperliquid.js";
+import {
+  handlePMMarkets,
+  handlePMMarketDetails,
+  handlePMBuy,
+  handlePMSell,
+  handlePMOpenOrders,
+  handlePMCancelOrder,
+} from "./tools/polymarket.js";
+import {
+  handleTrending,
+  handleSearchMentions,
+  handleTrendingTopics,
+} from "./tools/social-signals.js";
 
 // Load environment variables
 dotenvConfig();
@@ -94,6 +116,26 @@ const TOOLS: Tool[] = [
     name: "donut_balance",
     description:
       "Check wallet status and SOL balance on Solana. Returns connected wallet address and balance.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "donut_base_balance",
+    description:
+      "Check wallet status and ETH balance on Base chain. Returns connected wallet address and balance.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "donut_wallet_status",
+    description:
+      "Check wallet status across all supported chains (Solana and Base). Returns connected wallets and balances for each chain.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -173,6 +215,354 @@ const TOOLS: Tool[] = [
       required: ["query"],
     },
   },
+  // ============================================================================
+  // Trading Tools (Phase B: Base Chain)
+  // ============================================================================
+  {
+    name: "donut_base_quote",
+    description:
+      "Get a swap quote on Base chain via 0x aggregator. Shows expected output, minimum output, price impact, gas estimate, and route.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fromToken: {
+          type: "string",
+          description:
+            "Token to swap from (symbol like 'ETH', 'USDC' or contract address)",
+        },
+        toToken: {
+          type: "string",
+          description:
+            "Token to swap to (symbol like 'ETH', 'USDC' or contract address)",
+        },
+        amount: {
+          type: "number",
+          description: "Amount to swap in human-readable units (e.g., 0.1 ETH)",
+        },
+        slippage: {
+          type: "number",
+          description: "Slippage tolerance in percentage (default: 0.5 for 0.5%)",
+        },
+      },
+      required: ["fromToken", "toToken", "amount"],
+    },
+  },
+  {
+    name: "donut_base_swap",
+    description:
+      "Execute a token swap on Base chain via 0x aggregator. IMPORTANT: Always get a quote first and confirm the token addresses before swapping. Handles ERC20 approvals automatically.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fromToken: {
+          type: "string",
+          description:
+            "Token to swap from (symbol like 'ETH', 'USDC' or contract address)",
+        },
+        toToken: {
+          type: "string",
+          description:
+            "Token to swap to (symbol like 'ETH', 'USDC' or contract address)",
+        },
+        amount: {
+          type: "number",
+          description: "Amount to swap in human-readable units (e.g., 0.1 ETH)",
+        },
+        slippage: {
+          type: "number",
+          description: "Slippage tolerance in percentage (default: 0.5 for 0.5%)",
+        },
+      },
+      required: ["fromToken", "toToken", "amount"],
+    },
+  },
+  {
+    name: "donut_detect_chain",
+    description:
+      "Detect which blockchain a token belongs to based on its address format. Solana addresses are base58 (32-44 chars), Base/EVM addresses start with 0x (42 chars).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: {
+          type: "string",
+          description: "Token address or symbol to check",
+        },
+      },
+      required: ["token"],
+    },
+  },
+  // ============================================================================
+  // Trading Tools (Phase C: Hyperliquid Perpetuals)
+  // ============================================================================
+  {
+    name: "donut_hl_balance",
+    description:
+      "Check Hyperliquid account balance, margin status, and open positions. Returns account value, withdrawable balance, margin used, and unrealized PnL.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "donut_hl_open",
+    description:
+      "Open a perpetual futures position on Hyperliquid. Supports market and limit orders with configurable leverage. IMPORTANT: Check available markets first with donut_hl_markets.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        market: {
+          type: "string",
+          description: "Market symbol (e.g., 'BTC', 'ETH', 'SOL')",
+        },
+        side: {
+          type: "string",
+          enum: ["long", "short"],
+          description: "Position direction: 'long' or 'short'",
+        },
+        size: {
+          type: "number",
+          description: "Position size in base asset units (e.g., 0.01 for 0.01 BTC)",
+        },
+        leverage: {
+          type: "number",
+          description: "Leverage multiplier (default: 1, max varies by market)",
+        },
+        orderType: {
+          type: "string",
+          enum: ["market", "limit"],
+          description: "Order type: 'market' (default) or 'limit'",
+        },
+        price: {
+          type: "number",
+          description: "Limit price (required for limit orders)",
+        },
+        reduceOnly: {
+          type: "boolean",
+          description: "If true, only reduces existing position (default: false)",
+        },
+      },
+      required: ["market", "side", "size"],
+    },
+  },
+  {
+    name: "donut_hl_close",
+    description:
+      "Close an open perpetual position on Hyperliquid. Closes the entire position for the specified market with a market order.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        market: {
+          type: "string",
+          description: "Market symbol to close (e.g., 'BTC', 'ETH')",
+        },
+      },
+      required: ["market"],
+    },
+  },
+  {
+    name: "donut_hl_positions",
+    description:
+      "List all open perpetual positions on Hyperliquid with their current PnL, entry prices, and liquidation prices.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "donut_hl_markets",
+    description:
+      "List available perpetual markets on Hyperliquid with their maximum leverage limits.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  // ============================================================================
+  // Trading Tools (Phase D: Polymarket Prediction Markets)
+  // ============================================================================
+  {
+    name: "donut_pm_markets",
+    description:
+      "Search or list prediction markets on Polymarket. Shows market question, outcomes, odds, volume, and liquidity. Use 'trending' for popular markets or provide a search query.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Search query (e.g., 'bitcoin', 'election', 'superbowl')",
+        },
+        trending: {
+          type: "boolean",
+          description: "If true, returns trending/high-volume markets (default: false)",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of markets to return (default: 10)",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "donut_pm_market",
+    description:
+      "Get detailed information about a specific Polymarket prediction market including orderbook data.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conditionId: {
+          type: "string",
+          description: "The condition ID of the market (from donut_pm_markets)",
+        },
+      },
+      required: ["conditionId"],
+    },
+  },
+  {
+    name: "donut_pm_buy",
+    description:
+      "Buy shares on a Polymarket prediction market. IMPORTANT: Get market details first to find the correct tokenId for the outcome you want to bet on. Prices are between 0 and 1 (representing probability).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tokenId: {
+          type: "string",
+          description: "Token ID of the outcome to buy (from donut_pm_market)",
+        },
+        amount: {
+          type: "number",
+          description: "USDC amount to spend (for market orders) or calculate shares (for limit orders)",
+        },
+        price: {
+          type: "number",
+          description: "Optional limit price between 0-1 (e.g., 0.65 for 65% probability). If omitted, executes as market order.",
+        },
+      },
+      required: ["tokenId", "amount"],
+    },
+  },
+  {
+    name: "donut_pm_sell",
+    description:
+      "Sell shares on a Polymarket prediction market. IMPORTANT: You must own shares to sell them.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tokenId: {
+          type: "string",
+          description: "Token ID of the outcome to sell (from donut_pm_market)",
+        },
+        size: {
+          type: "number",
+          description: "Number of shares to sell",
+        },
+        price: {
+          type: "number",
+          description: "Optional limit price between 0-1. If omitted, executes as market order.",
+        },
+      },
+      required: ["tokenId", "size"],
+    },
+  },
+  {
+    name: "donut_pm_orders",
+    description:
+      "List all open orders on Polymarket.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "donut_pm_cancel",
+    description:
+      "Cancel an open order on Polymarket.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        orderId: {
+          type: "string",
+          description: "Order ID to cancel (from donut_pm_orders)",
+        },
+      },
+      required: ["orderId"],
+    },
+  },
+  // ============================================================================
+  // Social Signal Discovery (Phase E: Farcaster Integration)
+  // ============================================================================
+  {
+    name: "donut_trending",
+    description:
+      "Discover trending tokens on Farcaster social network. Aggregates token mentions from trending casts, analyzes sentiment, and returns social engagement metrics. Use this to find tokens with high social buzz.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "Maximum number of trending tokens to return (default: 10)",
+        },
+        minMentions: {
+          type: "number",
+          description: "Minimum mention count to include a token (default: 2)",
+        },
+        timeWindow: {
+          type: "string",
+          enum: ["1h", "6h", "24h", "7d"],
+          description: "Time window for trending analysis (default: 24h)",
+        },
+        network: {
+          type: "string",
+          enum: ["solana", "base", "ethereum"],
+          description: "Filter by blockchain network",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "donut_search_mentions",
+    description:
+      "Search for social mentions of a specific token or topic on Farcaster. Returns casts discussing the query with engagement metrics and sentiment analysis.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Token symbol (e.g., '$SOL', 'BONK') or topic to search for",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results to return (default: 20)",
+        },
+        sortBy: {
+          type: "string",
+          enum: ["algorithmic", "recent"],
+          description: "Sort order: 'algorithmic' for relevance or 'recent' for chronological (default: algorithmic)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "donut_trending_topics",
+    description:
+      "Get trending topics on Farcaster. Useful for discovering emerging narratives and themes in the crypto community.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "Maximum number of topics to return (default: 10)",
+        },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ============================================================================
@@ -249,6 +639,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "donut_base_balance": {
+        const result = await handleBaseWalletStatus();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_wallet_status": {
+        const result = await handleMultiChainWalletStatus();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
       case "donut_quote": {
         const result = await handleQuote({
           fromToken: args?.fromToken as string,
@@ -275,6 +679,194 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "donut_search_token": {
         const result = await handleTokenSearch(args?.query as string);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      // ============================================================================
+      // Trading Tools (Phase B: Base Chain)
+      // ============================================================================
+
+      case "donut_base_quote": {
+        const result = await handleBaseQuote({
+          fromToken: args?.fromToken as string,
+          toToken: args?.toToken as string,
+          amount: args?.amount as number,
+          slippage: args?.slippage as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_base_swap": {
+        const result = await handleBaseSwap({
+          fromToken: args?.fromToken as string,
+          toToken: args?.toToken as string,
+          amount: args?.amount as number,
+          slippage: args?.slippage as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_detect_chain": {
+        const token = args?.token as string;
+        const chain = detectChainFromToken(token);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              token,
+              detectedChain: chain,
+              explanation: chain === "solana"
+                ? "Base58 format detected - this appears to be a Solana address"
+                : chain === "base"
+                ? "0x format detected - this appears to be a Base/EVM address"
+                : "Unable to determine chain. Provide a full address or specify the chain explicitly.",
+            }, null, 2),
+          }],
+        };
+      }
+
+      // ============================================================================
+      // Trading Tools (Phase C: Hyperliquid Perpetuals)
+      // ============================================================================
+
+      case "donut_hl_balance": {
+        const result = await handleHLBalance();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_hl_open": {
+        const result = await handleHLOpen({
+          market: args?.market as string,
+          side: args?.side as "long" | "short",
+          size: args?.size as number,
+          leverage: args?.leverage as number | undefined,
+          orderType: args?.orderType as "market" | "limit" | undefined,
+          price: args?.price as number | undefined,
+          reduceOnly: args?.reduceOnly as boolean | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_hl_close": {
+        const result = await handleHLClose(args?.market as string);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_hl_positions": {
+        const result = await handleHLPositions();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_hl_markets": {
+        const result = await handleHLMarkets();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      // ============================================================================
+      // Trading Tools (Phase D: Polymarket Prediction Markets)
+      // ============================================================================
+
+      case "donut_pm_markets": {
+        const result = await handlePMMarkets({
+          query: args?.query as string | undefined,
+          trending: args?.trending as boolean | undefined,
+          limit: args?.limit as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_pm_market": {
+        const result = await handlePMMarketDetails(args?.conditionId as string);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_pm_buy": {
+        const result = await handlePMBuy({
+          tokenId: args?.tokenId as string,
+          amount: args?.amount as number,
+          price: args?.price as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_pm_sell": {
+        const result = await handlePMSell({
+          tokenId: args?.tokenId as string,
+          size: args?.size as number,
+          price: args?.price as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_pm_orders": {
+        const result = await handlePMOpenOrders();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_pm_cancel": {
+        const result = await handlePMCancelOrder(args?.orderId as string);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      // ============================================================================
+      // Social Signal Discovery (Phase E: Farcaster Integration)
+      // ============================================================================
+
+      case "donut_trending": {
+        const result = await handleTrending({
+          limit: args?.limit as number | undefined,
+          minMentions: args?.minMentions as number | undefined,
+          timeWindow: args?.timeWindow as "1h" | "6h" | "24h" | "7d" | undefined,
+          network: args?.network as "solana" | "base" | "ethereum" | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_search_mentions": {
+        const result = await handleSearchMentions({
+          query: args?.query as string,
+          limit: args?.limit as number | undefined,
+          sortBy: args?.sortBy as "algorithmic" | "recent" | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_trending_topics": {
+        const result = await handleTrendingTopics({
+          limit: args?.limit as number | undefined,
+        });
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
