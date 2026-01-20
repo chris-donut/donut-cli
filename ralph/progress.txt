@@ -218,3 +218,22 @@ Summary:
 Total commits: 6 (one per user story)
 
 ---
+
+## PHASE 3: MCP + MULTI-CHAIN TRADING
+
+### 2026-01-20 - DMCP-006 (Base Wallet Integration)
+- **What was implemented**: Base (EVM) wallet connectivity using viem
+- **Files changed**:
+  - src/mcp-external/tools/base-wallet.ts (new - Base wallet implementation)
+  - src/mcp-external/server.ts (added donut_balance_base tool)
+  - .env.example (added BASE_PRIVATE_KEY, BASE_RPC_URL config)
+  - package.json, bun.lock (added viem dependency)
+- **Learnings for future iterations:**
+  - viem has complex generic types - avoid explicit type annotations (PublicClient, WalletClient), let TypeScript infer them
+  - Use PrivateKeyAccount from viem/accounts instead of Account from viem
+  - EVM private keys need 0x prefix - normalize with startsWith check
+  - Base chain is just one of many viem chains - same pattern works for other EVM chains
+  - formatEther() returns string, not number - keep as string to preserve precision
+  - ERC-20 token balance requires readContract with balanceOf ABI
+
+---
