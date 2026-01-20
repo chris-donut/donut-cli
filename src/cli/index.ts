@@ -16,6 +16,8 @@ export { registerSetupCommands } from "./commands/setup.js";
 // Theme exports (for use in other command modules)
 export {
   BANNER,
+  BANNER_WITH_HINTS,
+  getBanner,
   DEMO_BANNER,
   DEMO_INDICATOR,
   PRIMARY,

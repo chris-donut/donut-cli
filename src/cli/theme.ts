@@ -18,6 +18,31 @@ ${chalk.hex("#FF6B35")("║")}                                                  
 ${chalk.hex("#FF6B35")("╚═══════════════════════════════════════════════════════════════╝")}
 `;
 
+export const BANNER_WITH_HINTS = `
+${chalk.hex("#FF6B35")("╔═══════════════════════════════════════════════════════════════╗")}
+${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}   ${chalk.bold.white("🍩 Donut CLI")} - ${chalk.gray("Unified Trading Terminal")}                    ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}   ${chalk.cyan("Strategy Building")} · ${chalk.green("Backtesting")} · ${chalk.yellow("AI Analysis")} · ${chalk.magenta("Execution")}   ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("╠═══════════════════════════════════════════════════════════════╣")}
+${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}   ${chalk.bold.white("Quick Start:")}                                               ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}     ${chalk.cyan("donut demo tour")}     Interactive tutorial (no API key)      ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}     ${chalk.cyan("donut setup")}         Configure API key                      ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}     ${chalk.cyan("donut chat")}          Start AI assistant                     ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}
+${chalk.hex("#FF6B35")("╚═══════════════════════════════════════════════════════════════╝")}
+`;
+
+/**
+ * Get the appropriate banner based on context
+ * @param showHints Whether to show quick start hints
+ */
+export function getBanner(showHints: boolean = false): string {
+  return showHints ? BANNER_WITH_HINTS : BANNER;
+}
+
 export const DEMO_BANNER = `
 ${chalk.hex("#FF6B35")("╔═══════════════════════════════════════════════════════════════╗")}
 ${chalk.hex("#FF6B35")("║")}                                                               ${chalk.hex("#FF6B35")("║")}

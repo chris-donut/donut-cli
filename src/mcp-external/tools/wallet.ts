@@ -1,7 +1,7 @@
 /**
- * Solana Wallet Integration
+ * Multi-Chain Wallet Integration
  *
- * Provides wallet connectivity and balance checking for Solana chain.
+ * Provides wallet connectivity and balance checking for Solana and Base chains.
  * Security: Private keys loaded only at execution time, never logged or cached.
  */
 
@@ -12,6 +12,7 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import bs58 from "bs58";
+import { handleBaseWalletStatus, type BaseWalletStatus } from "./base-wallet.js";
 
 // RPC endpoints
 const SOLANA_RPC = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
@@ -149,3 +150,29 @@ export function getWalletPublicKey(): PublicKey | null {
   const wallet = loadWallet();
   return wallet ? wallet.publicKey : null;
 }
+
+/**
+ * Combined multi-chain wallet status
+ */
+export interface MultiChainWalletStatus {
+  solana: WalletStatus;
+  base: BaseWalletStatus;
+}
+
+/**
+ * Get wallet status for all supported chains
+ */
+export async function handleMultiChainWalletStatus(): Promise<MultiChainWalletStatus> {
+  const [solanaStatus, baseStatus] = await Promise.all([
+    handleWalletStatus(),
+    handleBaseWalletStatus(),
+  ]);
+
+  return {
+    solana: solanaStatus,
+    base: baseStatus,
+  };
+}
+
+// Re-export Base wallet functions for convenience
+export { handleBaseWalletStatus, type BaseWalletStatus } from "./base-wallet.js";

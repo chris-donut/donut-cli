@@ -11,4 +11,16 @@
 | #1700 | 2:32 PM | 🔵 | Demo flow architecture analyzed for interactive enhancement opportunities | ~676 |
 | #1696 | " | 🔵 | Donut CLI setup wizard implementation analyzed | ~432 |
 | #1694 | " | 🔵 | Demo mode implementation provides interactive CLI learning experience | ~485 |
+
+### Jan 20, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2232 | 1:48 PM | 🟣 | Interactive Backtest Wizard Integrated into Run Command | ~363 |
+| #2231 | " | 🟣 | Interactive Backtest Wizard Implementation Started | ~367 |
+| #2226 | 1:47 PM | ✅ | Setup Wizard Function Exported for External Use | ~237 |
+| #2225 | " | 🟣 | Setup Wizard Enhanced with Contextual Next Steps | ~356 |
+| #2220 | 1:46 PM | 🔵 | Demo Commands Structure Analysis | ~313 |
+| #2217 | 1:45 PM | 🔵 | Setup Wizard Implementation Analysis | ~329 |
+| #2216 | " | 🔵 | Backtest Commands Structure Analysis | ~297 |
 </claude-mem-context>

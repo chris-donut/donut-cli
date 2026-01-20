@@ -5,6 +5,9 @@
  */
 
 import chalk from "chalk";
+import { existsSync, readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { Scenario, TutorialStep } from "./steps/base-step.js";
 import {
   waitForNavigation,
@@ -35,6 +38,10 @@ import {
   ICONS,
 } from "./theme.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = join(__dirname, "..", "..");
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -46,6 +53,35 @@ export interface TutorialState {
 }
 
 export type EngineAction = "next" | "back" | "menu" | "quit" | "restart";
+export type TransitionAction = "continue" | "setup" | "real";
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Check if API key is configured
+ */
+function hasApiKey(): boolean {
+  const envPath = join(PROJECT_ROOT, ".env");
+  if (!existsSync(envPath)) return false;
+  const envContent = readFileSync(envPath, "utf-8");
+  return /^ANTHROPIC_API_KEY=sk-ant-.+$/m.test(envContent);
+}
+
+/**
+ * Get context-specific real command suggestion based on scenario
+ */
+function getRealCommandForScenario(scenarioId: string): { command: string; description: string } {
+  const commandMap: Record<string, { command: string; description: string }> = {
+    "getting-started": { command: "donut chat", description: "Start AI chat mode" },
+    "strategy-basics": { command: "donut strategy build", description: "Build a real strategy" },
+    "backtest-workflow": { command: "donut backtest run", description: "Run a real backtest" },
+    "trade-analysis": { command: "donut backtest analyze", description: "Analyze real results" },
+    "full-workflow": { command: "donut chat", description: "Start building your portfolio" },
+  };
+  return commandMap[scenarioId] || { command: "donut chat", description: "Start AI assistant" };
+}
 
 // ============================================================================
 // Tutorial Engine
@@ -262,7 +298,7 @@ export class TutorialEngine {
   }
 
   /**
-   * Show completion screen
+   * Show completion screen with transition prompt
    */
   private async showCompletion(): Promise<void> {
     clearScreen();
@@ -281,8 +317,56 @@ export class TutorialEngine {
     }
 
     console.log();
-    console.log(MUTED("  Press Enter to return to menu..."));
-    await waitForNavigation();
+
+    // Show transition prompt
+    const transitionAction = await this.showTransitionPrompt();
+
+    if (transitionAction === "setup") {
+      // Launch setup wizard
+      const { runSetupWizard } = await import("../cli/commands/setup.js");
+      await runSetupWizard();
+    } else if (transitionAction === "real") {
+      // Show the suggested real command
+      const suggestion = getRealCommandForScenario(this.state.scenario.id);
+      console.log();
+      console.log(SUCCESS(`  Ready to try it for real!`));
+      console.log(`  Run: ${chalk.cyan(suggestion.command)}`);
+      console.log();
+      console.log(MUTED("  Press Enter to return to menu..."));
+      await waitForNavigation();
+    } else {
+      // Continue to menu
+      console.log(MUTED("  Press Enter to return to menu..."));
+      await waitForNavigation();
+    }
+  }
+
+  /**
+   * Show transition prompt after scenario completion
+   */
+  private async showTransitionPrompt(): Promise<TransitionAction> {
+    const apiKeyConfigured = hasApiKey();
+    const suggestion = getRealCommandForScenario(this.state.scenario.id);
+
+    console.log(chalk.bold("  What's next?\n"));
+
+    if (!apiKeyConfigured) {
+      // No API key - offer setup wizard vs continue demos
+      console.log(`  ${chalk.cyan("1)")} Continue exploring demos`);
+      console.log(`  ${chalk.cyan("2)")} Set up API key to use real features`);
+      console.log();
+
+      const answer = await prompt("  Your choice [1/2]");
+      return answer === "2" ? "setup" : "continue";
+    } else {
+      // Has API key - suggest context-specific real command
+      console.log(`  ${chalk.cyan("1)")} Continue exploring demos`);
+      console.log(`  ${chalk.cyan("2)")} ${suggestion.description} ${MUTED(`(${suggestion.command})`)}`);
+      console.log();
+
+      const answer = await prompt("  Your choice [1/2]");
+      return answer === "2" ? "real" : "continue";
+    }
   }
 
   /**

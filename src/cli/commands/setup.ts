@@ -258,8 +258,9 @@ async function validateApiKey(apiKey: string): Promise<boolean> {
 
 /**
  * Run interactive setup wizard
+ * Exported for use from other modules (e.g., first-run detection)
  */
-async function runSetupWizard(): Promise<void> {
+export async function runSetupWizard(): Promise<void> {
   console.log(chalk.cyan("\n╔══════════════════════════════════════════════════╗"));
   console.log(chalk.cyan("║          Donut CLI Setup Wizard                   ║"));
   console.log(chalk.cyan("╚══════════════════════════════════════════════════╝\n"));
@@ -398,14 +399,44 @@ async function runSetupWizard(): Promise<void> {
     console.log(chalk.green("✓ 'donut' command already available"));
   }
 
-  // Complete
+  // Complete - show contextual next steps based on what was configured
   console.log(chalk.bold.green("\n✨ Setup Complete!\n"));
   console.log(chalk.gray("─".repeat(50)));
-  console.log(chalk.bold("\nQuick Start:"));
-  console.log(`  ${chalk.cyan("donut demo tour")}     Interactive demo`);
-  console.log(`  ${chalk.cyan("donut chat")}          AI chat mode`);
-  console.log(`  ${chalk.cyan("donut paper start")}   Start paper trading`);
+
+  // Re-check status to see what was configured
+  const finalStatus = checkStatus();
+
+  console.log(chalk.bold("\nRecommended Next Steps:"));
+
+  if (finalStatus.apiKeyConfigured) {
+    // API key is configured - suggest real commands
+    console.log(`  ${chalk.green("1.")} ${chalk.cyan("donut chat")}          Start AI assistant`);
+    if (finalStatus.backendsConfigured.hummingbot) {
+      console.log(`  ${chalk.green("2.")} ${chalk.cyan("donut backtest run")} Run your first backtest`);
+      console.log(`  ${chalk.green("3.")} ${chalk.cyan("donut strategy build")} Create a trading strategy`);
+    } else {
+      console.log(`  ${chalk.green("2.")} ${chalk.cyan("donut demo tour")}     Explore features in demo mode`);
+      console.log(chalk.gray("\n  Configure Hummingbot for backtesting: donut setup wizard"));
+    }
+  } else {
+    // No API key - suggest demo first
+    console.log(`  ${chalk.green("1.")} ${chalk.cyan("donut demo tour")}     Learn the CLI without API key`);
+    console.log(`  ${chalk.green("2.")} Get an API key at: ${chalk.underline("https://console.anthropic.com/settings/keys")}`);
+    console.log(`  ${chalk.green("3.")} ${chalk.cyan("donut setup wizard")}  Come back to configure it`);
+  }
+
   console.log();
+
+  // Offer to start demo tour immediately if no API key
+  if (!finalStatus.apiKeyConfigured) {
+    const startDemo = await confirm("Would you like to start the demo tour now?", true);
+    if (startDemo) {
+      console.log();
+      // Dynamically import to avoid circular dependencies
+      const { startInteractiveDemo } = await import("../../demo/index.js");
+      await startInteractiveDemo({});
+    }
+  }
 }
 
 /**

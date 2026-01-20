@@ -8,4 +8,10 @@
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
 | #1816 | 4:53 PM | 🔵 | Comprehensive Donut CLI Architecture Analysis | ~862 |
+
+### Jan 20, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2236 | 1:49 PM | 🔵 | Ralph Machine-Readable PRD Format Analysis | ~325 |
 </claude-mem-context>
