@@ -64,17 +64,14 @@ export class BacktestAnalystAgent extends BaseAgent {
    */
   async runBacktest(config: Partial<BacktestConfig>, description?: string): Promise<AgentResult> {
     const configDescription = description || "the specified strategy";
-    const backend = this.getBackendType();
 
-    // Use the appropriate tool name based on backend
-    const startTool = backend === "hummingbot" ? "hb_backtest_start" : "backtest_start";
-
+    // Hummingbot is the primary backend for backtesting
     const prompt = `Run a backtest for ${configDescription} with these parameters:
 
 ${JSON.stringify(config, null, 2)}
 
 Please:
-1. Start the backtest with the ${startTool} tool
+1. Start the backtest with the hb_backtest_start tool
 2. Monitor the progress until completion
 3. Once complete, retrieve and analyze the results
 4. Provide a comprehensive analysis of the performance`;
@@ -136,12 +133,10 @@ Then provide:
    * List and summarize recent backtests
    */
   async listRecent(limit: number = 10): Promise<AgentResult> {
-    const backend = this.getBackendType();
-    const listTool = backend === "hummingbot" ? "hb_backtest_list" : "backtest_list_runs";
-
+    // Hummingbot is the primary backend for backtesting
     const prompt = `List the ${limit} most recent backtest runs and provide a summary:
 
-1. Use ${listTool} to get recent runs
+1. Use hb_backtest_list to get recent runs
 2. For each run, note the state, symbols, and time period
 3. For completed runs, get the key metrics
 4. Highlight any runs that performed particularly well or poorly

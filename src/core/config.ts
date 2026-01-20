@@ -25,13 +25,28 @@ export function loadConfig(): TerminalConfig {
     model: process.env.CLAUDE_MODEL || "sonnet",
     maxTurns: parseInt(process.env.MAX_TURNS || "50", 10),
     maxBudgetUsd: parseFloat(process.env.MAX_BUDGET_USD || "5.0"),
-    // Backend URLs - Hummingbot is preferred, nofx as fallback
+
+    // Donut Agents Backend (AI trading agents)
+    donutAgentsUrl: process.env.DONUT_AGENTS_URL,
+    donutAgentsAuthToken: process.env.DONUT_AGENTS_AUTH_TOKEN,
+
+    // Donut Backend (Solana DeFi)
+    donutBackendUrl: process.env.DONUT_BACKEND_URL,
+    donutBackendAuthToken: process.env.DONUT_BACKEND_AUTH_TOKEN,
+
+    // Hummingbot API (multi-exchange trading)
     hummingbotUrl: process.env.HUMMINGBOT_URL,
-    nofxApiUrl: process.env.NOFX_API_URL,
-    nofxAuthToken: process.env.NOFX_AUTH_TOKEN,
+    hummingbotUsername: process.env.HUMMINGBOT_USERNAME,
+    hummingbotPassword: process.env.HUMMINGBOT_PASSWORD,
+
+    // Python harness integration
     harnessWorkingDir: process.env.HARNESS_WORKING_DIR,
     pythonPath: process.env.PYTHON_PATH || "python3",
+
+    // Donut Browser integration
     donutBrowserUrl: process.env.DONUT_BROWSER_URL,
+
+    // Session management
     sessionDir: process.env.SESSION_DIR || ".sessions",
     logLevel: process.env.LOG_LEVEL || "info",
   };
@@ -64,7 +79,9 @@ export function getDefaultConfig(): Partial<TerminalConfig> {
     model: "sonnet",
     maxTurns: 50,
     maxBudgetUsd: 5.0,
-    nofxApiUrl: "http://localhost:8080",
+    donutAgentsUrl: "http://localhost:8080",
+    donutBackendUrl: "http://localhost:3000",
+    hummingbotUrl: "http://localhost:8000",
     pythonPath: "python3",
     sessionDir: ".sessions",
     logLevel: "info",

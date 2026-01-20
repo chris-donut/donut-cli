@@ -23,8 +23,9 @@ interface SetupStatus {
   buildExists: boolean;
   globallyLinked: boolean;
   backendsConfigured: {
+    donutAgents: boolean;
+    donutBackend: boolean;
     hummingbot: boolean;
-    nofx: boolean;
   };
 }
 
@@ -63,13 +64,14 @@ function checkStatus(): SetupStatus {
 
   let envExists = existsSync(envPath);
   let apiKeyConfigured = false;
-  let backendsConfigured = { hummingbot: false, nofx: false };
+  let backendsConfigured = { donutAgents: false, donutBackend: false, hummingbot: false };
 
   if (envExists) {
     const envContent = readFileSync(envPath, "utf-8");
     apiKeyConfigured = /^ANTHROPIC_API_KEY=sk-ant-.+$/m.test(envContent);
+    backendsConfigured.donutAgents = /^DONUT_AGENTS_URL=.+$/m.test(envContent);
+    backendsConfigured.donutBackend = /^DONUT_BACKEND_URL=.+$/m.test(envContent);
     backendsConfigured.hummingbot = /^HUMMINGBOT_URL=.+$/m.test(envContent);
-    backendsConfigured.nofx = /^NOFX_API_URL=.+$/m.test(envContent);
   }
 
   const nodeVersion = safeExec("node -v");
@@ -128,10 +130,13 @@ function printStatus(status: SetupStatus): void {
   // Backends
   console.log(chalk.bold("\nBackends (Optional)"));
   console.log(
-    `  Hummingbot:  ${status.backendsConfigured.hummingbot ? chalk.green("✓ Configured") : chalk.gray("Not configured")}`
+    `  Donut Agents:  ${status.backendsConfigured.donutAgents ? chalk.green("✓ Configured") : chalk.gray("Not configured")}`
   );
   console.log(
-    `  nofx:        ${status.backendsConfigured.nofx ? chalk.green("✓ Configured") : chalk.gray("Not configured")}`
+    `  Donut Backend: ${status.backendsConfigured.donutBackend ? chalk.green("✓ Configured") : chalk.gray("Not configured")}`
+  );
+  console.log(
+    `  Hummingbot:    ${status.backendsConfigured.hummingbot ? chalk.green("✓ Configured") : chalk.gray("Not configured")}`
   );
 
   console.log("\n" + chalk.gray("─".repeat(50)));
@@ -186,9 +191,18 @@ function ensureEnvFile(): void {
 # Required: Anthropic API Key
 ANTHROPIC_API_KEY=
 
-# Optional: Backend URLs
+# Optional: Donut Agents Backend (AI trading agents)
+DONUT_AGENTS_URL=
+DONUT_AGENTS_AUTH_TOKEN=
+
+# Optional: Donut Backend (Solana DeFi)
+DONUT_BACKEND_URL=
+DONUT_BACKEND_AUTH_TOKEN=
+
+# Optional: Hummingbot API (multi-exchange trading)
 HUMMINGBOT_URL=
-NOFX_API_URL=
+HUMMINGBOT_USERNAME=
+HUMMINGBOT_PASSWORD=
 
 # Settings
 LOG_LEVEL=info
@@ -300,22 +314,49 @@ async function runSetupWizard(): Promise<void> {
   if (configureBackends) {
     console.log(chalk.gray("\nLeave blank to skip each backend.\n"));
 
+    // Donut Agents Backend
+    console.log(chalk.bold("Donut Agents Backend") + chalk.gray(" (AI trading agents - port 8080)"));
+    const donutAgentsUrl = await prompt(
+      "  URL",
+      status.backendsConfigured.donutAgents ? undefined : ""
+    );
+    if (donutAgentsUrl) {
+      updateEnvValue("DONUT_AGENTS_URL", donutAgentsUrl);
+      const agentsToken = await prompt("  Auth Token (JWT)", "");
+      if (agentsToken) {
+        updateEnvValue("DONUT_AGENTS_AUTH_TOKEN", agentsToken);
+      }
+      console.log(chalk.green("✓ Donut Agents configured"));
+    }
+
+    // Donut Backend
+    console.log(chalk.bold("\nDonut Backend") + chalk.gray(" (Solana DeFi - port 3000)"));
+    const donutBackendUrl = await prompt(
+      "  URL",
+      status.backendsConfigured.donutBackend ? undefined : ""
+    );
+    if (donutBackendUrl) {
+      updateEnvValue("DONUT_BACKEND_URL", donutBackendUrl);
+      const backendToken = await prompt("  Auth Token (JWT)", "");
+      if (backendToken) {
+        updateEnvValue("DONUT_BACKEND_AUTH_TOKEN", backendToken);
+      }
+      console.log(chalk.green("✓ Donut Backend configured"));
+    }
+
+    // Hummingbot API
+    console.log(chalk.bold("\nHummingbot API") + chalk.gray(" (multi-exchange trading - port 8000)"));
     const hummingbotUrl = await prompt(
-      "Hummingbot Dashboard URL",
+      "  URL",
       status.backendsConfigured.hummingbot ? undefined : ""
     );
     if (hummingbotUrl) {
       updateEnvValue("HUMMINGBOT_URL", hummingbotUrl);
-      console.log(chalk.green("✓ Hummingbot URL configured"));
-    }
-
-    const nofxUrl = await prompt(
-      "nofx Backtest Server URL",
-      status.backendsConfigured.nofx ? undefined : ""
-    );
-    if (nofxUrl) {
-      updateEnvValue("NOFX_API_URL", nofxUrl);
-      console.log(chalk.green("✓ nofx URL configured"));
+      const hbUsername = await prompt("  Username", "admin");
+      updateEnvValue("HUMMINGBOT_USERNAME", hbUsername);
+      const hbPassword = await prompt("  Password", "admin");
+      updateEnvValue("HUMMINGBOT_PASSWORD", hbPassword);
+      console.log(chalk.green("✓ Hummingbot configured"));
     }
   }
 

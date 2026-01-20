@@ -25,6 +25,60 @@ AI-powered crypto trading terminal with multi-agent orchestration powered by the
 - **Paper Trading** - Simulate strategies with real-time or manual price data
 - **Risk Management** - Built-in risk controls with configurable limits
 - **Notification System** - Telegram, Discord, and webhook alerts
+- **MCP Integration** - Use donut tools directly from Claude Code
+
+## MCP Integration
+
+Use donut-cli tools directly from Claude Code without leaving your terminal.
+
+### Setup
+
+After installing donut-cli, add to your Claude Code settings (`~/.claude/settings.json`):
+
+```json
+{
+  "mcp_servers": {
+    "donut": {
+      "command": "donut-mcp",
+      "env": {
+        "ANTHROPIC_API_KEY": "your-key-here",
+        "SOLANA_PRIVATE_KEY": "your-base58-private-key",
+        "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com"
+      }
+    }
+  }
+}
+```
+
+**Security Note:** Your `SOLANA_PRIVATE_KEY` should be a base58-encoded private key. Never share this key or commit it to version control. The key is only loaded at execution time and is never logged.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `donut_strategy_build` | Build trading strategies from natural language |
+| `donut_backtest_run` | Run backtests on strategies |
+| `donut_portfolio` | Check portfolio status and positions |
+| `donut_balance` | Check Solana wallet status and SOL balance |
+| `donut_quote` | Get a swap quote without executing |
+| `donut_swap` | Execute a token swap on Solana via Jupiter |
+| `donut_search_token` | Search for tokens by name or symbol |
+
+### Example Usage
+
+From Claude Code, you can say:
+
+```
+"Build me a momentum strategy for SOL"
+"Backtest this strategy for 30 days"
+"Show my current portfolio"
+"Check my Solana wallet balance"
+"Get a quote to swap 1 SOL for USDC"
+"Search for the BONK token"
+"Swap 0.5 SOL to USDC"
+```
+
+See [llms.txt](./llms.txt) for complete documentation.
 
 ## Quick Start
 

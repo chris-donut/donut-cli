@@ -4,15 +4,16 @@
  * Provides centralized creation and caching of API client instances.
  * Prevents duplicate connections and enables consistent configuration.
  *
- * Features:
- * - Singleton pattern with per-config caching
- * - Lazy initialization
- * - Type-safe client retrieval
- * - Health check utilities
+ * Supported backends:
+ * - donutAgents: AI trading agents with LLM decisions (port 8080)
+ * - donutBackend: Solana DeFi portfolio & transactions (port 3000)
+ * - hummingbot: Multi-exchange trading & bot orchestration (port 8000)
+ * - telegram: Notification delivery
  */
 
 import { HummingbotClient, HummingbotClientConfig } from "./hummingbot-client.js";
-import { NofxClient, NofxClientConfig } from "./nofx-client.js";
+import { DonutAgentsClient, DonutAgentsClientConfig } from "./donut-agents-client.js";
+import { DonutBackendClient, DonutBackendClientConfig } from "./donut-backend-client.js";
 import {
   TelegramClientConfig,
   sendMessage,
@@ -71,20 +72,21 @@ export type TelegramConfig = TelegramClientConfig;
 /**
  * Client types available through the factory
  */
-export type ClientType = "hummingbot" | "nofx" | "telegram";
+export type ClientType = "donutAgents" | "donutBackend" | "hummingbot" | "telegram";
 
 /**
  * Configuration union for all client types
  */
 export type ClientConfig =
+  | { type: "donutAgents"; config: DonutAgentsClientConfig }
+  | { type: "donutBackend"; config: DonutBackendClientConfig }
   | { type: "hummingbot"; config: HummingbotClientConfig }
-  | { type: "nofx"; config: NofxClientConfig }
   | { type: "telegram"; config: TelegramConfig };
 
 /**
  * Client instance union
  */
-export type Client = HummingbotClient | NofxClient | TelegramClient;
+export type Client = DonutAgentsClient | DonutBackendClient | HummingbotClient | TelegramClient;
 
 // ============================================================================
 // Client Registry (Singleton Cache)
@@ -103,12 +105,56 @@ function getCacheKey(type: ClientType, identifier: string): string {
 const clientCache = new Map<string, Client>();
 
 // ============================================================================
+// Default URLs
+// ============================================================================
+
+const DEFAULT_DONUT_AGENTS_URL = "http://localhost:8080";
+const DEFAULT_DONUT_BACKEND_URL = "http://localhost:3000";
+const DEFAULT_HUMMINGBOT_URL = "http://localhost:8000";
+
+// ============================================================================
 // Factory Functions
 // ============================================================================
 
-// Default URLs for backends
-const DEFAULT_HUMMINGBOT_URL = "http://localhost:8000";
-const DEFAULT_NOFX_URL = "http://localhost:8080";
+/**
+ * Get or create a Donut Agents client
+ */
+export function getDonutAgentsClient(config?: Partial<DonutAgentsClientConfig>): DonutAgentsClient {
+  const appConfig = loadConfig();
+  const baseUrl = config?.baseUrl ?? appConfig.donutAgentsUrl ?? DEFAULT_DONUT_AGENTS_URL;
+  const timeout = config?.timeout ?? 30000;
+  const authToken = config?.authToken ?? appConfig.donutAgentsAuthToken;
+
+  const cacheKey = getCacheKey("donutAgents", baseUrl);
+
+  let client = clientCache.get(cacheKey);
+  if (!client) {
+    client = new DonutAgentsClient({ baseUrl, timeout, authToken });
+    clientCache.set(cacheKey, client);
+  }
+
+  return client as DonutAgentsClient;
+}
+
+/**
+ * Get or create a Donut Backend client
+ */
+export function getDonutBackendClient(config?: Partial<DonutBackendClientConfig>): DonutBackendClient {
+  const appConfig = loadConfig();
+  const baseUrl = config?.baseUrl ?? appConfig.donutBackendUrl ?? DEFAULT_DONUT_BACKEND_URL;
+  const timeout = config?.timeout ?? 30000;
+  const authToken = config?.authToken ?? appConfig.donutBackendAuthToken;
+
+  const cacheKey = getCacheKey("donutBackend", baseUrl);
+
+  let client = clientCache.get(cacheKey);
+  if (!client) {
+    client = new DonutBackendClient({ baseUrl, timeout, authToken });
+    clientCache.set(cacheKey, client);
+  }
+
+  return client as DonutBackendClient;
+}
 
 /**
  * Get or create a Hummingbot client
@@ -117,36 +163,18 @@ export function getHummingbotClient(config?: Partial<HummingbotClientConfig>): H
   const appConfig = loadConfig();
   const baseUrl = config?.baseUrl ?? appConfig.hummingbotUrl ?? DEFAULT_HUMMINGBOT_URL;
   const timeout = config?.timeout ?? 30000;
+  const username = config?.username ?? appConfig.hummingbotUsername;
+  const password = config?.password ?? appConfig.hummingbotPassword;
 
   const cacheKey = getCacheKey("hummingbot", baseUrl);
 
   let client = clientCache.get(cacheKey);
   if (!client) {
-    client = new HummingbotClient({ baseUrl, timeout });
+    client = new HummingbotClient({ baseUrl, timeout, username, password });
     clientCache.set(cacheKey, client);
   }
 
   return client as HummingbotClient;
-}
-
-/**
- * Get or create a nofx client
- */
-export function getNofxClient(config?: Partial<NofxClientConfig>): NofxClient {
-  const appConfig = loadConfig();
-  const baseUrl = config?.baseUrl ?? appConfig.nofxApiUrl ?? DEFAULT_NOFX_URL;
-  const timeout = config?.timeout ?? 30000;
-  const authToken = config?.authToken ?? appConfig.nofxAuthToken;
-
-  const cacheKey = getCacheKey("nofx", baseUrl);
-
-  let client = clientCache.get(cacheKey);
-  if (!client) {
-    client = new NofxClient({ baseUrl, timeout, authToken });
-    clientCache.set(cacheKey, client);
-  }
-
-  return client as NofxClient;
 }
 
 /**
@@ -182,21 +210,27 @@ export function getTelegramClient(config?: Partial<TelegramConfig>): TelegramCli
  */
 export function createClient<T extends ClientType>(
   type: T,
-  config?: T extends "hummingbot"
-    ? Partial<HummingbotClientConfig>
-    : T extends "nofx"
-      ? Partial<NofxClientConfig>
-      : Partial<TelegramConfig>
-): T extends "hummingbot"
-  ? HummingbotClient
-  : T extends "nofx"
-    ? NofxClient
-    : TelegramClient | null {
+  config?: T extends "donutAgents"
+    ? Partial<DonutAgentsClientConfig>
+    : T extends "donutBackend"
+      ? Partial<DonutBackendClientConfig>
+      : T extends "hummingbot"
+        ? Partial<HummingbotClientConfig>
+        : Partial<TelegramConfig>
+): T extends "donutAgents"
+  ? DonutAgentsClient
+  : T extends "donutBackend"
+    ? DonutBackendClient
+    : T extends "hummingbot"
+      ? HummingbotClient
+      : TelegramClient | null {
   switch (type) {
+    case "donutAgents":
+      return getDonutAgentsClient(config as Partial<DonutAgentsClientConfig>) as ReturnType<typeof createClient<T>>;
+    case "donutBackend":
+      return getDonutBackendClient(config as Partial<DonutBackendClientConfig>) as ReturnType<typeof createClient<T>>;
     case "hummingbot":
       return getHummingbotClient(config as Partial<HummingbotClientConfig>) as ReturnType<typeof createClient<T>>;
-    case "nofx":
-      return getNofxClient(config as Partial<NofxClientConfig>) as ReturnType<typeof createClient<T>>;
     case "telegram":
       return getTelegramClient(config as Partial<TelegramConfig>) as ReturnType<typeof createClient<T>>;
     default:
@@ -262,11 +296,14 @@ export async function checkBackendHealth(type: ClientType): Promise<BackendHealt
     let client: Client | null;
 
     switch (type) {
+      case "donutAgents":
+        client = getDonutAgentsClient();
+        break;
+      case "donutBackend":
+        client = getDonutBackendClient();
+        break;
       case "hummingbot":
         client = getHummingbotClient();
-        break;
-      case "nofx":
-        client = getNofxClient();
         break;
       case "telegram":
         client = getTelegramClient();
@@ -280,7 +317,7 @@ export async function checkBackendHealth(type: ClientType): Promise<BackendHealt
     }
 
     // Perform health check
-    const isHealthy = await (client as HummingbotClient | NofxClient).healthCheck?.() ?? false;
+    const isHealthy = await (client as DonutAgentsClient | DonutBackendClient | HummingbotClient).healthCheck?.() ?? false;
     const latencyMs = Date.now() - startTime;
 
     return {
@@ -302,26 +339,31 @@ export async function checkBackendHealth(type: ClientType): Promise<BackendHealt
  * Check health of all configured backends
  */
 export async function checkAllBackendsHealth(): Promise<BackendHealth[]> {
-  const types: ClientType[] = ["hummingbot", "nofx", "telegram"];
+  const types: ClientType[] = ["donutAgents", "donutBackend", "hummingbot", "telegram"];
   const results = await Promise.all(types.map(checkBackendHealth));
   return results;
 }
 
 /**
- * Get the preferred available backend for backtesting
+ * Get the preferred available backend for AI agent operations
  */
-export async function getPreferredBacktestBackend(): Promise<"hummingbot" | "nofx" | null> {
-  // Check hummingbot first (preferred)
-  const hbHealth = await checkBackendHealth("hummingbot");
-  if (hbHealth.available) {
-    return "hummingbot";
-  }
+export async function getPreferredAgentBackend(): Promise<"donutAgents" | null> {
+  const health = await checkBackendHealth("donutAgents");
+  return health.available ? "donutAgents" : null;
+}
 
-  // Fall back to nofx
-  const nofxHealth = await checkBackendHealth("nofx");
-  if (nofxHealth.available) {
-    return "nofx";
-  }
+/**
+ * Get the preferred available backend for Solana DeFi operations
+ */
+export async function getPreferredSolanaBackend(): Promise<"donutBackend" | null> {
+  const health = await checkBackendHealth("donutBackend");
+  return health.available ? "donutBackend" : null;
+}
 
-  return null;
+/**
+ * Get the preferred available backend for multi-exchange trading
+ */
+export async function getPreferredTradingBackend(): Promise<"hummingbot" | null> {
+  const health = await checkBackendHealth("hummingbot");
+  return health.available ? "hummingbot" : null;
 }

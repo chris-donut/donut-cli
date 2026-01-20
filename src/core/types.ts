@@ -45,7 +45,7 @@ export const TimeframeSchema = z.enum(["1m", "3m", "5m", "15m", "30m", "1h", "4h
 export const SideSchema = z.enum(["long", "short"]);
 
 // ============================================================================
-// Backtest Schemas (for nofx integration)
+// Backtest Schemas (for Hummingbot integration)
 // ============================================================================
 
 export const BacktestConfigSchema = z.object({
@@ -487,10 +487,18 @@ export interface TerminalConfig {
   maxTurns: number;
   maxBudgetUsd: number;
 
-  // Backend integrations (at least one needed for backtesting)
+  // Donut Agents Backend (AI trading agents)
+  donutAgentsUrl?: string;
+  donutAgentsAuthToken?: string;
+
+  // Donut Backend (Solana DeFi)
+  donutBackendUrl?: string;
+  donutBackendAuthToken?: string;
+
+  // Hummingbot API (multi-exchange trading)
   hummingbotUrl?: string;
-  nofxApiUrl?: string;
-  nofxAuthToken?: string;
+  hummingbotUsername?: string;
+  hummingbotPassword?: string;
 
   // Python harness integration
   harnessWorkingDir?: string;
@@ -509,13 +517,28 @@ export const TerminalConfigSchema = z.object({
   model: z.enum(["sonnet", "opus", "haiku"]).default("sonnet"),
   maxTurns: z.number().int().positive().default(50),
   maxBudgetUsd: z.number().positive().default(5.0),
-  // Backend options (at least one should be configured for backtesting)
+
+  // Donut Agents Backend (AI trading agents)
+  donutAgentsUrl: z.string().url().optional(),
+  donutAgentsAuthToken: z.string().optional(),
+
+  // Donut Backend (Solana DeFi)
+  donutBackendUrl: z.string().url().optional(),
+  donutBackendAuthToken: z.string().optional(),
+
+  // Hummingbot API (multi-exchange trading)
   hummingbotUrl: z.string().url().optional(),
-  nofxApiUrl: z.string().url().optional(),
-  nofxAuthToken: z.string().optional(),
+  hummingbotUsername: z.string().optional(),
+  hummingbotPassword: z.string().optional(),
+
+  // Python harness integration
   harnessWorkingDir: z.string().optional(),
   pythonPath: z.string().default("python3"),
+
+  // Donut Browser integration
   donutBrowserUrl: z.string().url().optional(),
+
+  // Session management
   sessionDir: z.string().default(".sessions"),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });

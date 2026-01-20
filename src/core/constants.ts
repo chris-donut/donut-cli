@@ -82,11 +82,14 @@ export const DEFAULTS = {
 // ============================================================================
 
 export const PORTS = {
-  /** Hummingbot Dashboard default port */
-  hummingbot: 8000,
+  /** Donut Agents Backend default port (AI trading agents) */
+  donutAgents: 8080,
 
-  /** nofx Go engine default port */
-  nofx: 8080,
+  /** Donut Backend default port (Solana DeFi) */
+  donutBackend: 3000,
+
+  /** Hummingbot API default port (multi-exchange trading) */
+  hummingbot: 8000,
 
   /** PostgreSQL default port */
   postgres: 5432,
@@ -220,12 +223,26 @@ export const AGENT_TYPES = {
 
 export const ENV_VARS = {
   anthropicApiKey: "ANTHROPIC_API_KEY",
-  hummingbotUrl: "HUMMINGBOT_URL",
-  nofxApiUrl: "NOFX_API_URL",
-  databaseUrl: "DATABASE_URL",
   claudeModel: "CLAUDE_MODEL",
+
+  // Donut Agents Backend
+  donutAgentsUrl: "DONUT_AGENTS_URL",
+  donutAgentsAuthToken: "DONUT_AGENTS_AUTH_TOKEN",
+
+  // Donut Backend
+  donutBackendUrl: "DONUT_BACKEND_URL",
+  donutBackendAuthToken: "DONUT_BACKEND_AUTH_TOKEN",
+
+  // Hummingbot API
+  hummingbotUrl: "HUMMINGBOT_URL",
+  hummingbotUsername: "HUMMINGBOT_USERNAME",
+  hummingbotPassword: "HUMMINGBOT_PASSWORD",
+
+  // Session and logging
   sessionDir: "SESSION_DIR",
   logLevel: "LOG_LEVEL",
+
+  // Notifications
   telegramBotToken: "TELEGRAM_BOT_TOKEN",
   telegramChatId: "TELEGRAM_CHAT_ID",
 } as const;

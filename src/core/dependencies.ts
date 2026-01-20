@@ -120,8 +120,8 @@ export interface McpServerProvider {
   /** Get default tools for an agent type */
   getDefaultTools?(agentType: AgentType): string[];
 
-  /** Get the backend type (hummingbot, nofx, or none) */
-  getBackendType?(): "hummingbot" | "nofx" | "none";
+  /** Get the backend type (donutAgents, donutBackend, hummingbot, or none) */
+  getBackendType?(): "donutAgents" | "donutBackend" | "hummingbot" | "none";
 }
 
 // ============================================================================

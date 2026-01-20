@@ -1,0 +1,125 @@
+# Donut CLI - AI Trading Terminal
+
+> AI-powered crypto trading terminal with multi-agent orchestration
+
+## What is Donut CLI?
+
+Donut CLI is a command-line trading terminal that uses AI agents (powered by Claude) to help you build, backtest, and execute cryptocurrency trading strategies. It supports multiple backends including Hummingbot Dashboard for live/paper trading.
+
+## MCP Server
+
+Donut CLI exposes an MCP (Model Context Protocol) server that integrates with Claude Code, allowing you to interact with trading tools directly from your terminal.
+
+### Installation
+
+```bash
+# Clone and install
+git clone https://github.com/chris-donut/donut-cli.git
+cd donut-cli
+bun install && bun run build
+
+# Link globally
+npm link
+```
+
+### Claude Code Configuration
+
+Add to your Claude Code settings (`~/.claude/settings.json`):
+
+```json
+{
+  "mcp_servers": {
+    "donut": {
+      "command": "donut-mcp",
+      "env": {
+        "ANTHROPIC_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+Or with full path:
+
+```json
+{
+  "mcp_servers": {
+    "donut": {
+      "command": "node",
+      "args": ["/path/to/donut-cli/dist/mcp-external/server.js"]
+    }
+  }
+}
+```
+
+## Available MCP Tools
+
+### donut_strategy_build
+
+Build trading strategies from natural language descriptions.
+
+**Parameters:**
+- `prompt` (required): Strategy description in natural language
+- `symbol` (optional): Trading pair to focus on (e.g., "SOL/USDT")
+
+**Example prompts:**
+- "Build a momentum strategy for SOL with 5% stop loss"
+- "Create a mean reversion strategy for BTC/ETH using RSI"
+- "Design a grid trading strategy for ETH-USDT"
+
+### donut_backtest_run
+
+Run backtests on trading strategies to validate performance.
+
+**Parameters:**
+- `strategy` (required): Strategy configuration from donut_strategy_build
+- `symbol` (required): Trading pair (e.g., "BTC-USDT")
+- `days` (optional): Backtest period in days (default: 30)
+
+**Example:**
+- "Backtest this momentum strategy on BTC-USDT for the last 60 days"
+
+### donut_portfolio
+
+Check current portfolio status including positions and P&L.
+
+**Parameters:** None
+
+**Example prompts:**
+- "Show my current portfolio"
+- "What positions do I have open?"
+- "What's my P&L?"
+
+## Quick Start Examples
+
+### Build and Test a Strategy
+
+```
+User: Build me a momentum strategy for SOL
+[donut_strategy_build executes]
+
+User: Run a backtest on that strategy for 30 days
+[donut_backtest_run executes]
+
+User: Show my portfolio
+[donut_portfolio executes]
+```
+
+### Full Workflow
+
+1. **Build Strategy**: "Create a breakout strategy for BTC with 10x leverage and 3% stop loss"
+2. **Backtest**: "Test this strategy on BTC-USDT for the last 90 days"
+3. **Review**: Check metrics (Sharpe ratio, max drawdown, win rate)
+4. **Paper Trade**: Start paper trading with validated strategy
+
+## Requirements
+
+- Node.js 18+
+- Anthropic API Key (for AI features)
+- Hummingbot Dashboard (optional, for backtesting/trading)
+
+## Links
+
+- Repository: https://github.com/chris-donut/donut-cli
+- Documentation: https://github.com/chris-donut/donut-cli/blob/main/README.md
+- MCP Protocol: https://modelcontextprotocol.io

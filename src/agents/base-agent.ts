@@ -238,7 +238,7 @@ export abstract class BaseAgent {
   /**
    * Get the backend type from the MCP provider
    */
-  protected getBackendType(): "hummingbot" | "nofx" | "none" {
+  protected getBackendType(): "donutAgents" | "donutBackend" | "hummingbot" | "none" {
     return this.mcpProvider.getBackendType?.() ?? "none";
   }
 

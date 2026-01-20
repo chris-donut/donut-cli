@@ -18,6 +18,10 @@ import { createLogger } from "../core/logger.js";
 export interface HummingbotClientConfig {
   baseUrl: string;
   timeout?: number;
+  /** HTTP Basic Auth username */
+  username?: string;
+  /** HTTP Basic Auth password */
+  password?: string;
 }
 
 export interface HummingbotStrategy {
@@ -66,10 +70,17 @@ const logger = createLogger("hummingbot-client");
 export class HummingbotClient {
   private baseUrl: string;
   private timeout: number;
+  private authHeader?: string;
 
   constructor(config: HummingbotClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, ""); // Remove trailing slash
     this.timeout = config.timeout || 30000;
+
+    // Build HTTP Basic Auth header if credentials provided
+    if (config.username && config.password) {
+      const credentials = Buffer.from(`${config.username}:${config.password}`).toString("base64");
+      this.authHeader = `Basic ${credentials}`;
+    }
   }
 
   // ============================================================================
@@ -428,6 +439,11 @@ export class HummingbotClient {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
+
+    // Add Basic Auth header if configured
+    if (this.authHeader) {
+      headers["Authorization"] = this.authHeader;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);

@@ -11,7 +11,8 @@ import { loadConfig, validateApiKeys } from "../core/config.js";
 import { SessionManager } from "../core/session.js";
 import { AgentType, WorkflowStage, getAllowedTools } from "../core/types.js";
 import { createHummingbotMcpServer } from "../mcp-servers/hummingbot-server.js";
-import { createNofxMcpServer } from "../mcp-servers/nofx-server.js";
+import { createDonutAgentsMcpServer } from "../mcp-servers/donut-agents-server.js";
+import { createDonutBackendMcpServer } from "../mcp-servers/donut-backend-server.js";
 
 import { INTERACTIVE_BANNER, PROMPT, MUTED, SUCCESS, ERROR } from "./theme.js";
 import { parseInput, getCommand, CommandResult } from "./commands.js";
@@ -86,30 +87,48 @@ Always confirm trade details before execution.`,
 
 const AGENT_TOOLS: Record<string, string[]> = {
   [AgentType.STRATEGY_BUILDER]: [
+    // Hummingbot strategy tools
     "hb_strategy_list",
     "hb_strategy_get",
     "hb_strategy_create",
-    "hb_strategy_update",
     "hb_market_candles",
+    // Donut Agents tools
+    "agents_list_traders",
+    "agents_get_analytics",
   ],
   [AgentType.BACKTEST_ANALYST]: [
-    "hb_backtest_run",
+    // Hummingbot backtest tools
+    "hb_backtest_start",
     "hb_backtest_status",
-    "hb_backtest_results",
+    "hb_backtest_stop",
+    "hb_backtest_metrics",
+    "hb_backtest_equity",
+    "hb_backtest_trades",
     "hb_backtest_list",
-    "backtest_start",
-    "backtest_status",
-    "backtest_get_metrics",
-    "backtest_get_trades",
+    // Donut Agents analytics
+    "agents_get_analytics",
+    "agents_get_trades",
   ],
   [AgentType.CHART_ANALYST]: [
+    // Hummingbot market data
     "hb_market_candles",
-    "hb_market_ticker",
+    "hb_market_prices",
+    // Solana token prices
+    "solana_get_token_price",
+    "solana_get_trending_tokens",
   ],
   [AgentType.EXECUTION_ASSISTANT]: [
+    // Hummingbot bot control
+    "hb_bot_list",
     "hb_bot_start",
     "hb_bot_stop",
-    "hb_bot_status",
+    // Donut Agents trader control
+    "agents_control_trader",
+    "agents_get_positions",
+    // Solana swap execution
+    "solana_get_swap_quote",
+    "solana_execute_swap",
+    "solana_get_portfolio",
   ],
 };
 
@@ -129,32 +148,60 @@ function askQuestion(rl: readline.Interface, prompt: string): Promise<string> {
 }
 
 /**
+ * MCP Server instance type union
+ */
+type McpServerInstance =
+  | ReturnType<typeof createHummingbotMcpServer>
+  | ReturnType<typeof createDonutAgentsMcpServer>
+  | ReturnType<typeof createDonutBackendMcpServer>;
+
+/**
  * Build MCP server configuration based on available backends
  */
 function buildMcpServers(config: ReturnType<typeof loadConfig>): Record<string, {
   type: "sdk";
   name: string;
-  instance: ReturnType<typeof createHummingbotMcpServer> | ReturnType<typeof createNofxMcpServer>;
+  instance: McpServerInstance;
 }> {
   const servers: Record<string, {
     type: "sdk";
     name: string;
-    instance: ReturnType<typeof createHummingbotMcpServer> | ReturnType<typeof createNofxMcpServer>;
+    instance: McpServerInstance;
   }> = {};
 
+  // Donut Agents Backend (AI trading agents - port 8080)
+  if (config.donutAgentsUrl) {
+    servers["donut-agents"] = {
+      type: "sdk",
+      name: "donut-agents",
+      instance: createDonutAgentsMcpServer({
+        baseUrl: config.donutAgentsUrl,
+        authToken: config.donutAgentsAuthToken,
+      }),
+    };
+  }
+
+  // Donut Backend (Solana DeFi - port 3000)
+  if (config.donutBackendUrl) {
+    servers["donut-backend"] = {
+      type: "sdk",
+      name: "donut-backend",
+      instance: createDonutBackendMcpServer({
+        baseUrl: config.donutBackendUrl,
+        authToken: config.donutBackendAuthToken,
+      }),
+    };
+  }
+
+  // Hummingbot API (multi-exchange trading - port 8000)
   if (config.hummingbotUrl) {
     servers["hummingbot"] = {
       type: "sdk",
       name: "hummingbot",
-      instance: createHummingbotMcpServer({ baseUrl: config.hummingbotUrl }),
-    };
-  } else if (config.nofxApiUrl) {
-    servers["nofx-backtest"] = {
-      type: "sdk",
-      name: "nofx-backtest",
-      instance: createNofxMcpServer({
-        baseUrl: config.nofxApiUrl,
-        authToken: config.nofxAuthToken,
+      instance: createHummingbotMcpServer({
+        baseUrl: config.hummingbotUrl,
+        username: config.hummingbotUsername,
+        password: config.hummingbotPassword,
       }),
     };
   }
@@ -182,7 +229,8 @@ async function runAgent(
   const allowedTools = tools.filter((t) => stageTools.includes(t));
 
   const options: Options = {
-    mcpServers: buildMcpServers(state.config),
+    // Type assertion needed due to SDK version mismatch
+    mcpServers: buildMcpServers(state.config) as unknown as Options["mcpServers"],
     allowedTools,
     maxTurns: state.config.maxTurns,
     systemPrompt,
@@ -433,12 +481,21 @@ export async function startInteractiveMode(): Promise<void> {
   }
 
   // Show backend status
+  const backends: string[] = [];
+  if (config.donutAgentsUrl) {
+    backends.push(`Agents (${config.donutAgentsUrl})`);
+  }
+  if (config.donutBackendUrl) {
+    backends.push(`Solana (${config.donutBackendUrl})`);
+  }
   if (config.hummingbotUrl) {
-    displayInfo(`Backend: Hummingbot (${config.hummingbotUrl})`);
-  } else if (config.nofxApiUrl) {
-    displayInfo(`Backend: nofx (${config.nofxApiUrl})`);
+    backends.push(`Hummingbot (${config.hummingbotUrl})`);
+  }
+
+  if (backends.length > 0) {
+    displayInfo(`Backends: ${backends.join(", ")}`);
   } else {
-    displayInfo("No backend configured - some features may be limited");
+    displayInfo("No backends configured - some features may be limited");
   }
 
   console.log();

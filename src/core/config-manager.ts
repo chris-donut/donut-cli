@@ -220,9 +220,9 @@ export class ConfigManager {
     }
 
     // Check for at least one backend
-    if (!config.hummingbotUrl && !config.nofxApiUrl) {
+    if (!config.hummingbotUrl && !config.donutAgentsUrl && !config.donutBackendUrl) {
       throw new ConfigError("No backend configured", {
-        hint: "Set HUMMINGBOT_URL or NOFX_API_URL in your .env file",
+        hint: "Set HUMMINGBOT_URL, DONUT_AGENTS_URL, or DONUT_BACKEND_URL in your .env file",
       });
     }
   }
@@ -230,20 +230,28 @@ export class ConfigManager {
   /**
    * Check if a backend is configured
    */
-  hasBackend(type: "hummingbot" | "nofx"): boolean {
+  hasBackend(type: "hummingbot" | "donutAgents" | "donutBackend"): boolean {
     const config = this.getTerminalConfig();
-    return type === "hummingbot"
-      ? !!config.hummingbotUrl
-      : !!config.nofxApiUrl;
+    switch (type) {
+      case "hummingbot":
+        return !!config.hummingbotUrl;
+      case "donutAgents":
+        return !!config.donutAgentsUrl;
+      case "donutBackend":
+        return !!config.donutBackendUrl;
+      default:
+        return false;
+    }
   }
 
   /**
    * Get the primary backend type
    */
-  getPrimaryBackend(): "hummingbot" | "nofx" | null {
+  getPrimaryBackend(): "hummingbot" | "donutAgents" | "donutBackend" | null {
     const config = this.getTerminalConfig();
+    if (config.donutAgentsUrl) return "donutAgents";
+    if (config.donutBackendUrl) return "donutBackend";
     if (config.hummingbotUrl) return "hummingbot";
-    if (config.nofxApiUrl) return "nofx";
     return null;
   }
 
@@ -268,7 +276,9 @@ export class ConfigManager {
       terminal: {
         ...config.terminal,
         anthropicApiKey: undefined,
-        nofxAuthToken: undefined,
+        donutAgentsAuthToken: undefined,
+        donutBackendAuthToken: undefined,
+        hummingbotPassword: undefined,
       },
     };
 
@@ -345,12 +355,31 @@ export class ConfigManager {
     if (process.env.HUMMINGBOT_URL) {
       terminal.hummingbotUrl = process.env.HUMMINGBOT_URL;
     }
-    if (process.env.NOFX_API_URL) {
-      terminal.nofxApiUrl = process.env.NOFX_API_URL;
+    // Donut Agents Backend
+    if (process.env.DONUT_AGENTS_URL) {
+      terminal.donutAgentsUrl = process.env.DONUT_AGENTS_URL;
     }
-    if (process.env.NOFX_AUTH_TOKEN) {
-      terminal.nofxAuthToken = process.env.NOFX_AUTH_TOKEN;
+    if (process.env.DONUT_AGENTS_AUTH_TOKEN) {
+      terminal.donutAgentsAuthToken = process.env.DONUT_AGENTS_AUTH_TOKEN;
     }
+
+    // Donut Backend (Solana DeFi)
+    if (process.env.DONUT_BACKEND_URL) {
+      terminal.donutBackendUrl = process.env.DONUT_BACKEND_URL;
+    }
+    if (process.env.DONUT_BACKEND_AUTH_TOKEN) {
+      terminal.donutBackendAuthToken = process.env.DONUT_BACKEND_AUTH_TOKEN;
+    }
+
+    // Hummingbot API credentials
+    if (process.env.HUMMINGBOT_USERNAME) {
+      terminal.hummingbotUsername = process.env.HUMMINGBOT_USERNAME;
+    }
+    if (process.env.HUMMINGBOT_PASSWORD) {
+      terminal.hummingbotPassword = process.env.HUMMINGBOT_PASSWORD;
+    }
+
+    // Python harness
     if (process.env.HARNESS_WORKING_DIR) {
       terminal.harnessWorkingDir = process.env.HARNESS_WORKING_DIR;
     }

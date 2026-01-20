@@ -8,7 +8,19 @@
 // Clients
 // ============================================================================
 
-// Hummingbot Dashboard client
+// Donut Agents Backend client (AI trading agents)
+export {
+  DonutAgentsClient,
+  DonutAgentsClientConfig,
+} from "./donut-agents-client.js";
+
+// Donut Backend client (Solana DeFi)
+export {
+  DonutBackendClient,
+  DonutBackendClientConfig,
+} from "./donut-backend-client.js";
+
+// Hummingbot Dashboard client (multi-exchange trading)
 export {
   HummingbotClient,
   HummingbotClientConfig,
@@ -17,14 +29,6 @@ export {
   MarketData,
   CandleData,
 } from "./hummingbot-client.js";
-
-// nofx backtesting client
-export {
-  NofxClient,
-  NofxClientConfig,
-  BacktestDecision,
-  BacktestRunMetadata,
-} from "./nofx-client.js";
 
 // Telegram notification functions
 export {
@@ -54,8 +58,9 @@ export {
   Client,
   BackendHealth,
   // Factory functions
+  getDonutAgentsClient,
+  getDonutBackendClient,
   getHummingbotClient,
-  getNofxClient,
   getTelegramClient,
   createClient,
   // Cache management
@@ -66,7 +71,9 @@ export {
   // Health checks
   checkBackendHealth,
   checkAllBackendsHealth,
-  getPreferredBacktestBackend,
+  getPreferredAgentBackend,
+  getPreferredSolanaBackend,
+  getPreferredTradingBackend,
 } from "./client-factory.js";
 
 // ============================================================================

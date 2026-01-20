@@ -38,11 +38,12 @@ export function registerBacktestCommands(program: Command): void {
         const config = loadConfig();
 
         // Check if backend is configured
-        if (!config.hummingbotUrl && !config.nofxApiUrl) {
+        if (!config.hummingbotUrl) {
           spinner.fail(chalk.red("No backend configured for backtesting"));
-          console.log(chalk.gray("\nConfigure one of:"));
+          console.log(chalk.gray("\nConfigure Hummingbot API:"));
           console.log(chalk.gray("  HUMMINGBOT_URL=http://localhost:8000"));
-          console.log(chalk.gray("  NOFX_API_URL=http://localhost:8080"));
+          console.log(chalk.gray("  HUMMINGBOT_USERNAME=admin"));
+          console.log(chalk.gray("  HUMMINGBOT_PASSWORD=admin"));
           process.exit(1);
         }
 

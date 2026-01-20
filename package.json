@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "donut": "./dist/index.js"
+    "donut": "./dist/index.js",
+    "donut-mcp": "./dist/mcp-external/server.js"
   },
   "scripts": {
     "build": "tsc",
@@ -30,6 +31,10 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.77",
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@solana/web3.js": "^1.98.4",
+    "bs58": "^6.0.0",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
     "dotenv": "^16.6.1",

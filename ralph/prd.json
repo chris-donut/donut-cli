@@ -1,113 +1,196 @@
 {
-  "project": "Donut CLI - Dexter-Inspired Phase 2 Agent Improvements",
-  "branchName": "ralph/dexter-phase2-agents",
-  "description": "Agent architecture improvements inspired by Dexter: ReAct-style reasoning loop, context compaction for memory efficiency, iteration limits with graceful degradation, and enhanced agent observability.",
+  "project": "Donut CLI MCP + Multi-Chain Trading Expansion",
+  "branchName": "ralph/mcp-multichain-trading",
+  "description": "Transform donut-cli into an MCP server with multi-chain DEX, perps, and prediction market support. Enable natural language trade execution in <30 seconds via Claude Code integration.",
   "userStories": [
     {
-      "id": "AG-001",
-      "title": "Implement ReAct-Style Reasoning Loop",
-      "description": "As an agent developer, I want explicit reasoning traces so that agent decisions are transparent and debuggable",
+      "id": "DMCP-001",
+      "title": "MCP Server Foundation",
+      "description": "As a Claude Code user, I want to add donut-cli as an MCP server so that I can trade from my existing Claude terminal.",
       "acceptanceCriteria": [
-        "Create src/agents/reasoning.ts with ReasoningStep interface",
-        "Include thought, action, observation, reflection fields",
-        "Add scratchpad: ReasoningStep[] to BaseAgent",
-        "Modify agent run loop to emit reasoning events",
-        "Add getReasoningTrace() method to BaseAgent",
-        "Emit agent:thinking events with thought content",
-        "Persist reasoning trace in session state",
-        "Typecheck passes"
+        "src/mcp/server.ts implements MCP server protocol using @modelcontextprotocol/sdk",
+        "Server exposes donut_swap, donut_balance, donut_quote tools",
+        "MCP config example in README.md for Claude Code setup",
+        "Server starts with 'donut mcp serve' command",
+        "MCP server runs independently, does not interfere with existing agent orchestration",
+        "Existing donut chat, donut strategy, donut backtest commands work unchanged",
+        "New trading agents registered separately from Strategy Builder / Backtest Analyst",
+        "Typecheck passes",
+        "Lint passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Created ReasoningScratchpad class with thought/action/observation/reflection tracking. Integrated into BaseAgent with getReasoningTrace() method. Emits agent:thinking events via eventBus. Trace included in AgentResult for debugging."
+      "notes": "Extended existing src/mcp-external/server.ts with trading tools: donut_balance, donut_quote, donut_swap, donut_search_token. Tools registered with proper input schemas and handlers. README.md updated with MCP config including Solana wallet setup."
     },
     {
-      "id": "AG-002",
-      "title": "Add Context Compaction with Summaries",
-      "description": "As a trader, I want long sessions to not run out of context so that I can have extended conversations",
+      "id": "DMCP-002",
+      "title": "Solana Wallet Integration",
+      "description": "As a trader, I want to connect my Solana wallet so that I can execute swaps on-chain.",
       "acceptanceCriteria": [
-        "Create src/agents/context-manager.ts with ContextManager class",
-        "Implement summarizeToolResult(result) using fast model",
-        "Add configurable summarization threshold (token count)",
-        "Track context token usage with estimateTokens()",
-        "Implement compactContext() to summarize oldest messages",
-        "Add context usage to agent status",
-        "Integrate with BaseAgent tool result handling",
-        "Typecheck passes"
+        "Support wallet via private key in .env (SOLANA_PRIVATE_KEY)",
+        "donut wallet status shows connected wallet and SOL balance",
+        "Wallet connection persists across sessions",
+        "Private keys NEVER logged, even at debug level",
+        "Keys loaded only at execution time, not cached in memory",
+        ".env file has restrictive permissions warning in setup",
+        "Typecheck passes",
+        "Lint passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Created ContextManager with token estimation, auto-summarization for large tool results, and compaction. Integrated into BaseAgent with getContextUsage() and compactContext() methods. Local summarization (no LLM) extracts key fields from JSON."
+      "notes": "Created src/mcp-external/tools/wallet.ts with handleWalletStatus(), getWalletForSigning(), getWalletPublicKey(). Keys loaded via loadWallet() at execution time only - never cached. Supports base58 and array formats. .env.example updated with SOLANA_PRIVATE_KEY config and security warning."
     },
     {
-      "id": "AG-003",
-      "title": "Add Iteration Limits with Graceful Degradation",
-      "description": "As a developer, I want agents to not loop forever so that runaway agents are prevented",
+      "id": "DMCP-003",
+      "title": "Jupiter Swap Execution",
+      "description": "As a trader, I want to swap tokens on Solana so that I can trade via natural language.",
       "acceptanceCriteria": [
-        "Add maxIterations config to AgentConfig (default 25)",
-        "Track iteration count in BaseAgent run loop",
-        "When limit reached, generate progress summary instead of failing",
-        "Implement generateProgressSummary() method",
-        "Log warning when approaching limit (80% threshold)",
-        "Emit agent:iteration_limit event when triggered",
-        "Allow per-request iteration override",
-        "Typecheck passes"
+        "Integrate Jupiter Aggregator API v6",
+        "donut_swap tool accepts: { fromToken, toToken, amount, slippage? }",
+        "Returns transaction signature on success",
+        "Handles common errors (insufficient balance, slippage exceeded)",
+        "Quote preview before execution with donut_quote",
+        "Transaction polling until confirmed OR timeout (60s) with clear status",
+        "If timeout: return tx signature + 'pending' status, not error",
+        "Slippage defaults to 0.5%, user can override",
+        "Quote shows expected vs minimum received amount",
+        "Confirmation message shows actual vs quoted price",
+        "Typecheck passes",
+        "Lint passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Added maxIterations to AgentConfig, checkIterationLimit() and generateProgressSummary() methods. Warning at 80%, graceful summary at 100%. Emits agent:thinking event on limit."
+      "notes": "Created src/mcp-external/tools/swap.ts with handleQuote() and handleSwap(). Uses Jupiter API v6 (api.jup.ag). Quote returns expectedOutput, minimumOutput, priceImpact, route. Swap includes pre-flight simulation, 60s timeout polling, and returns status: signed/submitted/confirmed/failed/pending."
     },
     {
-      "id": "AG-004",
-      "title": "Add Agent Factory Pattern",
-      "description": "As a developer, I want async agent initialization so that setup is separated from construction",
+      "id": "DMCP-004",
+      "title": "Token Discovery",
+      "description": "As a trader, I want to find tokens by name/symbol so that I can swap without knowing contract addresses.",
       "acceptanceCriteria": [
-        "Add static create() factory method to BaseAgent",
-        "Move async initialization to create() method",
-        "Make constructor private",
-        "Add AgentBuilder fluent interface for configuration",
-        "Support withModel(), withMaxIterations(), withTools() methods",
-        "Update existing agent creation code to use factory",
-        "Typecheck passes"
+        "donut_search_token tool searches Jupiter token list",
+        "Returns top 5 matches with symbol, name, address, logo",
+        "Caches token list locally (refresh daily)",
+        "Token search shows contract address prominently",
+        "User must confirm token address before swap",
+        "Warning for tokens with similar names to popular tokens",
+        "Typecheck passes",
+        "Lint passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Created AgentBuilder class with fluent interface. Supports withModel(), withMaxIterations(), withTools(), withDependencies(). Includes createAgent() and createAgentAsync() convenience functions. Constructor kept protected for backwards compatibility."
+      "notes": "Created src/mcp-external/tools/token-search.ts with handleTokenSearch(). Fetches from token.jup.ag/all with 24h cache in .donut-token-cache.json. Returns top 5 scored matches. Includes Levenshtein distance check for similar names to popular tokens (SOL, USDC, BONK, etc.) with warning messages."
     },
     {
-      "id": "AG-005",
-      "title": "Add AbortSignal Support for Cancellation",
-      "description": "As a user, I want to cancel long-running agent operations gracefully",
+      "id": "DMCP-005",
+      "title": "Transaction Safety Guard",
+      "description": "As a trader, I want safeguards against failed/stuck transactions so that I don't lose funds.",
       "acceptanceCriteria": [
-        "Add abortSignal?: AbortSignal to AgentConfig",
-        "Check abortSignal.aborted in agent run loop",
-        "Return partial results on abort instead of throwing",
-        "Implement generatePartialResult() method",
-        "Clean up resources on abort (close connections, save state)",
-        "Log cancellation with context",
-        "Typecheck passes"
+        "Pre-flight simulation before signing",
+        "Transaction timeout with retry option",
+        "Clear distinction: 'signed', 'submitted', 'confirmed', 'failed'",
+        "Recovery instructions if transaction stuck",
+        "Typecheck passes",
+        "Lint passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Added abortSignal to AgentConfig, check in run loop, generatePartialResult() method shows recent actions and preserves session. Logged with context."
+      "notes": "Implemented in swap.ts: simulateTransaction() before signing, 60s timeout polling loop, SwapResult.status enum for clear states, recoveryInstructions field with Solscan link for stuck/failed transactions."
     },
     {
-      "id": "AG-006",
-      "title": "Add Agent Metrics and Observability",
-      "description": "As a developer, I want agent execution metrics so that I can monitor and optimize performance",
+      "id": "DMCP-006",
+      "title": "Base Wallet Integration",
+      "description": "As a trader, I want to connect my Base wallet so that I can trade on Base chain.",
       "acceptanceCriteria": [
-        "Create src/agents/metrics.ts with AgentMetrics interface",
-        "Track: totalIterations, toolCalls, tokenUsage, duration",
-        "Track: successRate, averageToolDuration per tool",
-        "Implement collectMetrics() method in BaseAgent",
-        "Emit metrics on agent completion",
-        "Add metrics to session state for historical analysis",
-        "Export formatMetricsReport() for readable output",
-        "Typecheck passes"
+        "Support wallet via private key in .env (BASE_PRIVATE_KEY)",
+        "donut wallet status shows Base wallet and ETH balance",
+        "Same security constraints as Solana wallet (no logging, etc.)",
+        "Typecheck passes",
+        "Lint passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Created MetricsCollector class with comprehensive tracking: per-tool metrics (call count, duration, success rate), iteration tracking, token estimation, reasoning steps. Integrated into BaseAgent run() loop with metricsHistory for session analysis. Emits agent:metrics event. Exports formatMetricsReport() and formatMetricsSummary() for display."
+      "passes": false,
+      "notes": "Use viem for EVM transactions. Reuse security patterns from Solana wallet."
+    },
+    {
+      "id": "DMCP-007",
+      "title": "0x Swap Execution",
+      "description": "As a trader, I want to swap tokens on Base so that I can access Base ecosystem.",
+      "acceptanceCriteria": [
+        "Integrate 0x Swap API (or 1inch as fallback)",
+        "donut_swap tool detects chain from token address",
+        "Supports same interface as Jupiter swaps",
+        "Gas estimation included in quote",
+        "Same transaction safety guards as Solana",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Unified swap interface across chains. Chain detection based on token address format."
+    },
+    {
+      "id": "DMCP-008",
+      "title": "Hyperliquid Account Connection",
+      "description": "As a trader, I want to connect my Hyperliquid account so that I can trade perps.",
+      "acceptanceCriteria": [
+        "Integrate Hyperliquid TypeScript SDK",
+        "Support API key authentication",
+        "donut_hl_balance shows account balance and positions",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Use hyperliquid npm package. API key stored in .env (HYPERLIQUID_API_KEY, HYPERLIQUID_API_SECRET)."
+    },
+    {
+      "id": "DMCP-009",
+      "title": "Perp Position Management",
+      "description": "As a trader, I want to open/close leveraged positions so that I can trade perps via natural language.",
+      "acceptanceCriteria": [
+        "donut_hl_open tool: { market, side, size, leverage, orderType }",
+        "donut_hl_close tool: close position by market",
+        "donut_hl_positions tool: list open positions with PnL",
+        "Leverage validation (max per market)",
+        "Liquidation price shown before opening position",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Show liquidation price upfront. Validate leverage against market maximums."
+    },
+    {
+      "id": "DMCP-010",
+      "title": "Polymarket Integration",
+      "description": "As a trader, I want to trade prediction markets so that I can bet on events.",
+      "acceptanceCriteria": [
+        "Integrate Polymarket API",
+        "donut_pm_markets tool: search/list markets",
+        "donut_pm_buy / donut_pm_sell tools",
+        "Show market odds and volume",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Polymarket uses USDC on Polygon. May need wallet integration for that chain."
+    },
+    {
+      "id": "DMCP-011",
+      "title": "Social Signal Discovery",
+      "description": "As a trader, I want to discover trending tokens from CT/Farcaster so that I can find opportunities.",
+      "acceptanceCriteria": [
+        "Integrate Farcaster API (Neynar or direct)",
+        "donut_trending tool: tokens with high social volume",
+        "Filter by: mentions, sentiment, volume threshold",
+        "Returns token + social stats + link to source",
+        "Typecheck passes",
+        "Lint passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Use Neynar API for Farcaster. Optionally add Twitter/X API for CT signals."
     }
   ]
 }

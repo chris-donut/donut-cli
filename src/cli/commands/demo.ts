@@ -1,5 +1,10 @@
 /**
  * Demo Mode Commands - Interactive demo for learning the CLI
+ *
+ * Features:
+ * - Interactive tutorial system with multiple scenarios
+ * - Progress tracking and resume capability
+ * - Quick-access subcommands for specific demo features
  */
 
 import { Command } from "commander";
@@ -10,6 +15,7 @@ import {
   generateDemoTrades,
   generateDemoBacktestRuns,
 } from "../../modes/demo-mode.js";
+import { startInteractiveDemo, SCENARIOS } from "../../demo/index.js";
 import { DEMO_BANNER, DEMO_INDICATOR } from "../theme.js";
 
 /**
@@ -20,100 +26,36 @@ export function registerDemoCommands(program: Command): void {
     .command("demo")
     .description("Demo mode for learning the CLI without backends");
 
+  // Main interactive tutorial (default)
   demo
     .command("tour", { isDefault: true })
-    .description("Run an interactive demo tour")
-    .action(async () => {
-      console.log(DEMO_BANNER);
-
-      const sleep = (ms: number) =>
-        new Promise((resolve) => setTimeout(resolve, ms));
-
-      console.log(
-        chalk.bold(`\n${DEMO_INDICATOR} Welcome to the Donut CLI Demo Tour!\n`)
-      );
-      console.log(
-        chalk.gray(
-          "This tour will show you the main features using simulated data.\n"
-        )
-      );
-
-      // Step 1: Show strategies
-      console.log(chalk.yellow("─".repeat(60)));
-      console.log(chalk.bold(`\n📋 Step 1: Available Strategies\n`));
-      await sleep(500);
-
-      const strategies = generateDemoStrategies();
-      for (const strategy of strategies) {
-        console.log(`  ${chalk.cyan(strategy.name)}`);
-        console.log(
-          `  ${chalk.gray(strategy.description?.slice(0, 60) + "...")}`
-        );
-        console.log();
+    .description("Run the interactive tutorial system")
+    .option("-s, --scenario <id>", "Jump to specific scenario")
+    .option("-r, --reset", "Reset all tutorial progress")
+    .option("--list", "List available scenarios")
+    .action(async (options) => {
+      // List scenarios
+      if (options.list) {
+        console.log(chalk.bold("\nAvailable Tutorial Scenarios:\n"));
+        for (const scenario of SCENARIOS) {
+          console.log(
+            `  ${chalk.cyan(scenario.id.padEnd(20))} ${scenario.name} (${scenario.duration})`
+          );
+          console.log(`  ${chalk.gray(scenario.description)}`);
+          console.log();
+        }
+        console.log(chalk.gray("Use --scenario <id> to jump to a specific tutorial\n"));
+        return;
       }
 
-      // Step 2: Show backtest results
-      console.log(chalk.yellow("─".repeat(60)));
-      console.log(chalk.bold(`\n📊 Step 2: Sample Backtest Results\n`));
-      await sleep(500);
-
-      const metrics = generateDemoBacktestResults();
-      console.log(
-        `  Total Return:    ${chalk.green(metrics.totalReturnPct.toFixed(1) + "%")}`
-      );
-      console.log(
-        `  Max Drawdown:    ${chalk.red("-" + metrics.maxDrawdownPct.toFixed(1) + "%")}`
-      );
-      console.log(`  Sharpe Ratio:    ${chalk.cyan(metrics.sharpeRatio.toFixed(2))}`);
-      console.log(
-        `  Win Rate:        ${chalk.white((metrics.winRate * 100).toFixed(0) + "%")}`
-      );
-      console.log(`  Total Trades:    ${chalk.white(metrics.trades.toString())}`);
-      console.log(
-        `  Profit Factor:   ${chalk.green(metrics.profitFactor.toFixed(2))}`
-      );
-      console.log();
-
-      // Step 3: Show sample trades
-      console.log(chalk.yellow("─".repeat(60)));
-      console.log(chalk.bold(`\n💹 Step 3: Sample Trade History\n`));
-      await sleep(500);
-
-      const trades = generateDemoTrades(5);
-      for (const trade of trades.slice(0, 6)) {
-        const date = new Date(trade.timestamp).toLocaleString();
-        const sideStr =
-          trade.side === "long" ? chalk.green("LONG ") : chalk.red("SHORT");
-        const actionStr =
-          trade.action === "open" ? chalk.cyan("OPEN ") : chalk.yellow("CLOSE");
-        const pnlStr =
-          trade.realizedPnL !== undefined
-            ? trade.realizedPnL >= 0
-              ? chalk.green(`+$${trade.realizedPnL.toFixed(2)}`)
-              : chalk.red(`$${trade.realizedPnL.toFixed(2)}`)
-            : chalk.gray("--");
-
-        console.log(
-          `  ${chalk.gray(date.slice(0, 17))} ${actionStr} ${sideStr} ${trade.symbol.padEnd(10)} $${trade.price.toFixed(2).padStart(10)} PnL: ${pnlStr}`
-        );
-      }
-
-      console.log(chalk.yellow("\n─".repeat(60)));
-      console.log(chalk.bold(`\n✨ Demo Tour Complete!\n`));
-      console.log(chalk.gray("Now try these commands to explore more:\n"));
-      console.log(
-        `  ${chalk.cyan("donut demo strategies")} - View all demo strategies`
-      );
-      console.log(
-        `  ${chalk.cyan("donut demo backtest")} - See detailed backtest results`
-      );
-      console.log(
-        `  ${chalk.cyan("donut demo trades")} - View more sample trades`
-      );
-      console.log(`  ${chalk.cyan("donut demo runs")} - List demo backtest runs`);
-      console.log(chalk.gray("\nTo use real backends, run: donut start"));
+      // Start interactive demo
+      await startInteractiveDemo({
+        scenario: options.scenario,
+        reset: options.reset,
+      });
     });
 
+  // Quick-access subcommands (unchanged from original)
   demo
     .command("strategies")
     .description("List demo strategies")

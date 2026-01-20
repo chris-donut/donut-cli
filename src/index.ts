@@ -6,8 +6,9 @@
  * and execution powered by Claude AI agents.
  *
  * Supports multiple backends:
- * - Hummingbot Dashboard (default)
- * - nofx Go engine (optional)
+ * - Donut Agents Backend (AI trading agents with LLM decisions)
+ * - Donut Backend (Solana DeFi portfolio & transactions)
+ * - Hummingbot API (multi-exchange trading & bot orchestration)
  */
 
 import { Command } from "commander";
