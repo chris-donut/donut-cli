@@ -1,196 +1,164 @@
 {
-  "project": "Donut CLI MCP + Multi-Chain Trading Expansion",
-  "branchName": "ralph/mcp-multichain-trading",
-  "description": "Transform donut-cli into an MCP server with multi-chain DEX, perps, and prediction market support. Enable natural language trade execution in <30 seconds via Claude Code integration.",
+  "project": "Agent Execution & Trust Layer",
+  "branchName": "ralph/agent-trust-layer",
+  "description": "Transform Donut from a trading CLI into the trust substrate Claude plugs into. Implement workflow MCP primitives (research → plan → pretrade_check → execute → report) backed by a policy engine with hard limit enforcement. Target: >50% activation rate (first trade within 24h of install).",
   "userStories": [
     {
-      "id": "DMCP-001",
-      "title": "MCP Server Foundation",
-      "description": "As a Claude Code user, I want to add donut-cli as an MCP server so that I can trade from my existing Claude terminal.",
+      "id": "WFL-001",
+      "title": "Research Tool - Market Context Primitive",
+      "description": "As a trader using Claude Code, I want to call donut_research with a token or narrative so that I receive structured market context without manually querying multiple sources.",
       "acceptanceCriteria": [
-        "src/mcp/server.ts implements MCP server protocol using @modelcontextprotocol/sdk",
-        "Server exposes donut_swap, donut_balance, donut_quote tools",
-        "MCP config example in README.md for Claude Code setup",
-        "Server starts with 'donut mcp serve' command",
-        "MCP server runs independently, does not interfere with existing agent orchestration",
-        "Existing donut chat, donut strategy, donut backtest commands work unchanged",
-        "New trading agents registered separately from Strategy Builder / Backtest Analyst",
+        "MCP tool donut_research accepts token address, symbol, or narrative string",
+        "Returns structured JSON: { sentiment, keyLevels, recentNews, socialMentions, riskFactors }",
+        "Integrates existing Farcaster trending + token search tools internally",
+        "Read-only operation (no state changes)",
+        "Response time <5s for token lookups",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Extended existing src/mcp-external/server.ts with trading tools: donut_balance, donut_quote, donut_swap, donut_search_token. Tools registered with proper input schemas and handlers. README.md updated with MCP config including Solana wallet setup."
+      "notes": "Implemented in workflow.ts. Aggregates Farcaster trending, mentions, and token search. Returns sentiment scoring, risk factors, and token info."
     },
     {
-      "id": "DMCP-002",
-      "title": "Solana Wallet Integration",
-      "description": "As a trader, I want to connect my Solana wallet so that I can execute swaps on-chain.",
+      "id": "WFL-002",
+      "title": "Plan Tool - Trade Plan Object",
+      "description": "As a trader, I want to call donut_plan with a thesis and risk parameters so that I receive a structured trade plan object I can review before execution.",
       "acceptanceCriteria": [
-        "Support wallet via private key in .env (SOLANA_PRIVATE_KEY)",
-        "donut wallet status shows connected wallet and SOL balance",
-        "Wallet connection persists across sessions",
-        "Private keys NEVER logged, even at debug level",
-        "Keys loaded only at execution time, not cached in memory",
-        ".env file has restrictive permissions warning in setup",
+        "MCP tool donut_plan accepts: { thesis, token, direction, riskPercent, timeHorizon }",
+        "Returns trade plan object: { entry, target, stopLoss, size, invalidation, confidence, warnings }",
+        "Size calculated from portfolio balance and riskPercent",
+        "Validates token exists and is tradeable on supported venues",
+        "Plan object includes unique planId for tracking",
+        "Does not execute any trades (planning only)",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Created src/mcp-external/tools/wallet.ts with handleWalletStatus(), getWalletForSigning(), getWalletPublicKey(). Keys loaded via loadWallet() at execution time only - never cached. Supports base58 and array formats. .env.example updated with SOLANA_PRIVATE_KEY config and security warning."
+      "notes": "Implemented in workflow.ts. Calculates position size from wallet balance and risk %. Persists plans to ~/.donut/plans/ for tracking."
     },
     {
-      "id": "DMCP-003",
-      "title": "Jupiter Swap Execution",
-      "description": "As a trader, I want to swap tokens on Solana so that I can trade via natural language.",
+      "id": "POL-001",
+      "title": "Policy Engine Core",
+      "description": "As Donut, I want a policy engine that enforces hard limits so that users cannot accidentally exceed their risk parameters.",
       "acceptanceCriteria": [
-        "Integrate Jupiter Aggregator API v6",
-        "donut_swap tool accepts: { fromToken, toToken, amount, slippage? }",
-        "Returns transaction signature on success",
-        "Handles common errors (insufficient balance, slippage exceeded)",
-        "Quote preview before execution with donut_quote",
-        "Transaction polling until confirmed OR timeout (60s) with clear status",
-        "If timeout: return tx signature + 'pending' status, not error",
-        "Slippage defaults to 0.5%, user can override",
-        "Quote shows expected vs minimum received amount",
-        "Confirmation message shows actual vs quoted price",
+        "Policy config stored in ~/.donut/policies.json",
+        "Supports: maxPositionSize, maxPortfolioRisk, cooldownMinutes",
+        "Policy engine exposes checkPolicy(plan): PolicyResult function",
+        "PolicyResult includes: { passed, violations[], warnings[] }",
+        "Default policies created on first run (conservative defaults)",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Created src/mcp-external/tools/swap.ts with handleQuote() and handleSwap(). Uses Jupiter API v6 (api.jup.ag). Quote returns expectedOutput, minimumOutput, priceImpact, route. Swap includes pre-flight simulation, 60s timeout polling, and returns status: signed/submitted/confirmed/failed/pending."
+      "notes": "Implemented in policy.ts. Conservative defaults: 10% maxPositionSize, 25% maxPortfolioRisk, 20% maxAssetConcentration, 5min cooldown."
     },
     {
-      "id": "DMCP-004",
-      "title": "Token Discovery",
-      "description": "As a trader, I want to find tokens by name/symbol so that I can swap without knowing contract addresses.",
+      "id": "WFL-003",
+      "title": "Pretrade Check Tool - Policy Enforcement Gate",
+      "description": "As a trader, I want to call donut_pretrade_check with a plan object so that I know if the trade violates any of my risk policies before execution.",
       "acceptanceCriteria": [
-        "donut_search_token tool searches Jupiter token list",
-        "Returns top 5 matches with symbol, name, address, logo",
-        "Caches token list locally (refresh daily)",
-        "Token search shows contract address prominently",
-        "User must confirm token address before swap",
-        "Warning for tokens with similar names to popular tokens",
+        "MCP tool donut_pretrade_check accepts plan object from WFL-002",
+        "Returns: { passed: boolean, violations: string[], warnings: string[] }",
+        "Checks against policy engine (POL-001)",
+        "Violations are hard stops (position limit exceeded)",
+        "Warnings are soft alerts (unusual size, low liquidity)",
+        "Failed pretrade prevents execution via donut_execute",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Created src/mcp-external/tools/token-search.ts with handleTokenSearch(). Fetches from token.jup.ag/all with 24h cache in .donut-token-cache.json. Returns top 5 scored matches. Includes Levenshtein distance check for similar names to popular tokens (SOL, USDC, BONK, etc.) with warning messages."
+      "notes": "Handler in server.ts calls checkPolicy() and updates plan.pretradeStatus. Execute tool checks this status before proceeding."
     },
     {
-      "id": "DMCP-005",
-      "title": "Transaction Safety Guard",
-      "description": "As a trader, I want safeguards against failed/stuck transactions so that I don't lose funds.",
+      "id": "WFL-004",
+      "title": "Execute Tool - Validated Plan Execution",
+      "description": "As a trader, I want to call donut_execute with a validated plan so that the trade executes only if pretrade checks passed.",
       "acceptanceCriteria": [
-        "Pre-flight simulation before signing",
-        "Transaction timeout with retry option",
-        "Clear distinction: 'signed', 'submitted', 'confirmed', 'failed'",
-        "Recovery instructions if transaction stuck",
+        "MCP tool donut_execute accepts planId from validated plan",
+        "Rejects execution if pretrade_check not called or failed",
+        "Routes to appropriate venue (Jupiter/0x/Hyperliquid) based on token chain",
+        "Returns execution result: { executionId, status, fills, avgPrice, fees }",
+        "Failure handling: If tx signed but not confirmed, auto-retry once then fail",
+        "Status includes: pending | confirmed | failed | retrying",
+        "Stores execution event for posttrade reporting",
+        "Integrates with existing wallet.ts and base-wallet.ts",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Implemented in swap.ts: simulateTransaction() before signing, 60s timeout polling loop, SwapResult.status enum for clear states, recoveryInstructions field with Solscan link for stuck/failed transactions."
+      "notes": "Implemented in workflow.ts. Routes to handleSwap (Solana) or handleBaseSwap (Base). Retry once with increased slippage on failure. Logs execution for cooldown tracking."
     },
     {
-      "id": "DMCP-006",
-      "title": "Base Wallet Integration",
-      "description": "As a trader, I want to connect my Base wallet so that I can trade on Base chain.",
+      "id": "WFL-005",
+      "title": "Report Tool - Posttrade Analysis",
+      "description": "As a trader, I want to call donut_report with an execution ID so that I receive posttrade analysis and attribution.",
       "acceptanceCriteria": [
-        "Support wallet via private key in .env (BASE_PRIVATE_KEY)",
-        "donut wallet status shows Base wallet and ETH balance",
-        "Same security constraints as Solana wallet (no logging, etc.)",
+        "MCP tool donut_report accepts executionId",
+        "Returns: { plan, execution, slippage, fees, pnlIfClosed, holdingPeriod }",
+        "Includes original thesis and invalidation conditions",
+        "Calculates unrealized PnL at current prices",
+        "Read-only (does not modify positions)",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Created src/mcp-external/tools/base-wallet.ts using viem. Implements handleBaseWalletStatus(), getBaseTokenBalance(), getBaseAccountForSigning(). Keys loaded via loadBaseWallet() at execution time only. Supports mainnet and testnet via BASE_TESTNET flag. Added donut_base_balance and donut_wallet_status tools to MCP server. .env.example updated with BASE_PRIVATE_KEY config and security warning."
+      "notes": "Implemented in workflow.ts. Fetches current price via quote APIs. Calculates slippage, PnL, holding period from execution data."
     },
     {
-      "id": "DMCP-007",
-      "title": "0x Swap Execution",
-      "description": "As a trader, I want to swap tokens on Base so that I can access Base ecosystem.",
+      "id": "POL-002",
+      "title": "Policy Configuration Tool",
+      "description": "As a trader, I want to call donut_policy_set to configure my risk limits so that the policy engine enforces my preferences.",
       "acceptanceCriteria": [
-        "Integrate 0x Swap API (or 1inch as fallback)",
-        "donut_swap tool detects chain from token address",
-        "Supports same interface as Jupiter swaps",
-        "Gas estimation included in quote",
-        "Same transaction safety guards as Solana",
+        "MCP tool donut_policy_set accepts policy key-value pairs",
+        "Validates policy values are within sane ranges",
+        "Persists to ~/.donut/policies.json",
+        "Returns current policy state after update",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "Created src/mcp-external/tools/base-swap.ts with handleBaseQuote() and handleBaseSwap() using 0x API v1. Implements detectChainFromToken() for base58 vs 0x address detection. Quote includes gasLimit, gasPriceGwei, estimatedCostEth. Same safety pattern: ERC20 approval check, simulateContract before signing, 60s timeout polling, status enum (signed/submitted/confirmed/failed/pending). Added donut_base_quote, donut_base_swap, donut_detect_chain tools to MCP server."
+      "notes": "Implemented in policy.ts. Validates ranges: position size 0-100%, cooldown 0-1440min. Returns updated policy after save."
     },
     {
-      "id": "DMCP-008",
-      "title": "Hyperliquid Account Connection",
-      "description": "As a trader, I want to connect my Hyperliquid account so that I can trade perps.",
+      "id": "POL-003",
+      "title": "Kill Switch Tool",
+      "description": "As a trader, I want a donut_kill_switch tool that immediately blocks all new executions so that I can halt trading in emergencies.",
       "acceptanceCriteria": [
-        "Integrate Hyperliquid TypeScript SDK",
-        "Support API key authentication",
-        "donut_hl_balance shows account balance and positions",
+        "MCP tool donut_kill_switch accepts: { enabled: boolean, reason?: string }",
+        "When enabled, all donut_execute calls fail with 'Kill switch active: {reason}'",
+        "Kill switch state persisted to disk (survives restarts)",
+        "donut_policy_get returns kill switch status",
+        "Can be disabled by calling with { enabled: false }",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 8,
       "passes": true,
-      "notes": "Created src/mcp-external/tools/hyperliquid.ts using hyperliquid npm package. Implements handleHLBalance() with wallet address derived from private key via viem. Uses HYPERLIQUID_PRIVATE_KEY env var (same EVM format). Added donut_hl_balance and donut_hl_markets tools to MCP server. .env.example updated with Hyperliquid config."
+      "notes": "Implemented in policy.ts. Kill switch stored in policies.json with timestamp and reason. checkPolicy() returns violation if enabled."
     },
     {
-      "id": "DMCP-009",
-      "title": "Perp Position Management",
-      "description": "As a trader, I want to open/close leveraged positions so that I can trade perps via natural language.",
+      "id": "POL-004",
+      "title": "Position Limit Enforcement",
+      "description": "As a trader, I want the policy engine to enforce maximum position sizes so that no single trade exceeds my risk tolerance.",
       "acceptanceCriteria": [
-        "donut_hl_open tool: { market, side, size, leverage, orderType }",
-        "donut_hl_close tool: close position by market",
-        "donut_hl_positions tool: list open positions with PnL",
-        "Leverage validation (max per market)",
-        "Liquidation price shown before opening position",
+        "Policy engine checks proposed size against maxPositionSize (% of portfolio)",
+        "Checks against maxPortfolioRisk (total risk across all positions)",
+        "Checks against per-asset concentration limits",
+        "Returns violation if any limit exceeded",
+        "Limits configurable via donut_policy_set",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 9,
       "passes": true,
-      "notes": "Implemented handleHLOpen(), handleHLClose(), handleHLPositions(), handleHLMarkets() in hyperliquid.ts. Uses SDK's order format (coin, is_buy, limit_px, order_type, reduce_only). Market orders use IOC with 0.5% slippage from current mid price. Validates leverage against market maximums from getMeta(). Returns liquidation price from position state after order."
-    },
-    {
-      "id": "DMCP-010",
-      "title": "Polymarket Integration",
-      "description": "As a trader, I want to trade prediction markets so that I can bet on events.",
-      "acceptanceCriteria": [
-        "Integrate Polymarket API",
-        "donut_pm_markets tool: search/list markets",
-        "donut_pm_buy / donut_pm_sell tools",
-        "Show market odds and volume",
-        "Typecheck passes",
-        "Lint passes"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Created src/mcp-external/tools/polymarket.ts using @polymarket/clob-client SDK. Implements Gamma API for market discovery (searchMarketsGamma, getTrendingMarkets) and CLOB API for trading (handlePMBuy, handlePMSell). Added 6 tools: donut_pm_markets (search/trending), donut_pm_market (details with orderbook), donut_pm_buy (market/limit orders), donut_pm_sell (market/limit orders), donut_pm_orders (list open), donut_pm_cancel (cancel order). Uses Polygon wallet (POLYGON_PRIVATE_KEY) with API credential derivation. Supports GTC (limit) and FOK (market) order types. .env.example updated with Polygon/Polymarket configuration."
-    },
-    {
-      "id": "DMCP-011",
-      "title": "Social Signal Discovery",
-      "description": "As a trader, I want to discover trending tokens from CT/Farcaster so that I can find opportunities.",
-      "acceptanceCriteria": [
-        "Integrate Farcaster API (Neynar or direct)",
-        "donut_trending tool: tokens with high social volume",
-        "Filter by: mentions, sentiment, volume threshold",
-        "Returns token + social stats + link to source",
-        "Typecheck passes",
-        "Lint passes"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Created src/mcp-external/tools/social-signals.ts using @neynar/nodejs-sdk. Implements handleTrending() (aggregates token mentions from trending Farcaster feed), handleSearchMentions() (searches for specific token mentions with engagement metrics), handleTrendingTopics() (discovers trending topics/narratives). Added 3 tools: donut_trending (filter by limit, minMentions, timeWindow, network), donut_search_mentions (search query with algorithmic/recent sorting), donut_trending_topics. Includes sentiment analysis via keyword matching (bullish/bearish terms), token extraction via $SYMBOL regex patterns, and Warpcast URL construction for source links. .env.example updated with NEYNAR_API_KEY config."
+      "notes": "Enhanced checkPolicy() with portfolio risk tracking. Sums risk from 24h executions. Checks maxPortfolioRisk and maxAssetConcentration limits."
     }
   ]
 }

@@ -45,6 +45,20 @@ import {
   handleSearchMentions,
   handleTrendingTopics,
 } from "./tools/social-signals.js";
+import {
+  handleResearch,
+  handlePlan,
+  handleExecute,
+  handleReport,
+  loadPlan,
+  savePlan,
+} from "./tools/workflow.js";
+import {
+  checkPolicy,
+  handlePolicySet,
+  handlePolicyGet,
+  handleKillSwitch,
+} from "./tools/policy.js";
 
 // Load environment variables
 dotenvConfig();
@@ -563,6 +577,163 @@ const TOOLS: Tool[] = [
       required: [],
     },
   },
+  // ============================================================================
+  // Workflow Tools (Agent Trust Layer)
+  // ============================================================================
+  {
+    name: "donut_research",
+    description:
+      "Aggregate market context for a token or narrative. Combines social signals, token info, and sentiment analysis into a structured research report. Use this FIRST before creating a trade plan.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Token symbol (e.g., 'SOL', '$BONK'), contract address, or narrative/topic to research",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "donut_plan",
+    description:
+      "Generate a structured trade plan with entry, target, stop loss, and position sizing. The plan must pass pretrade checks before execution. Use donut_research first to inform your thesis.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        thesis: {
+          type: "string",
+          description:
+            "Your investment thesis - why you want to take this trade (e.g., 'SOL breaking out of consolidation with strong volume')",
+        },
+        token: {
+          type: "string",
+          description:
+            "Token symbol or contract address to trade (e.g., 'SOL', 'BONK', or full address)",
+        },
+        direction: {
+          type: "string",
+          enum: ["long", "short"],
+          description: "Trade direction: 'long' to buy, 'short' to sell/short",
+        },
+        riskPercent: {
+          type: "number",
+          description:
+            "Percentage of portfolio to risk on this trade (e.g., 2 for 2%). Recommended: 1-5%",
+        },
+        timeHorizon: {
+          type: "string",
+          description:
+            "Optional expected holding period (e.g., '1d', '1w', 'swing')",
+        },
+      },
+      required: ["thesis", "token", "direction", "riskPercent"],
+    },
+  },
+  {
+    name: "donut_execute",
+    description:
+      "Execute a validated trade plan. Requires pretrade_check to have passed first. Routes to the appropriate exchange (Jupiter for Solana, 0x for Base) based on token chain. Implements automatic retry on failure.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        planId: {
+          type: "string",
+          description: "The planId from a validated donut_plan result. Plan must have passed donut_pretrade_check.",
+        },
+      },
+      required: ["planId"],
+    },
+  },
+  {
+    name: "donut_report",
+    description:
+      "Generate a posttrade analysis report for an executed trade. Returns slippage, fees, unrealized PnL, and holding period.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        executionId: {
+          type: "string",
+          description: "The executionId from a donut_execute result",
+        },
+      },
+      required: ["executionId"],
+    },
+  },
+  // Policy Engine Tools
+  {
+    name: "donut_pretrade_check",
+    description:
+      "Check a trade plan against configured risk policies before execution. Returns pass/fail with any violations or warnings. Must be called before donut_execute.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        planId: {
+          type: "string",
+          description: "The planId from a donut_plan result to check against policies",
+        },
+      },
+      required: ["planId"],
+    },
+  },
+  {
+    name: "donut_policy_set",
+    description:
+      "Configure trading risk policies. Set position limits, portfolio risk limits, and cooldown periods.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        maxPositionSize: {
+          type: "number",
+          description: "Maximum position size as % of portfolio (1-100). Default: 10%",
+        },
+        maxPortfolioRisk: {
+          type: "number",
+          description: "Maximum total portfolio risk as % (1-100). Default: 25%",
+        },
+        maxAssetConcentration: {
+          type: "number",
+          description: "Maximum % of portfolio in any single asset (1-100). Default: 20%",
+        },
+        cooldownMinutes: {
+          type: "number",
+          description: "Minimum minutes between trades on same token (0-1440). Default: 5",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "donut_policy_get",
+    description:
+      "Get current policy configuration including position limits, risk limits, cooldown, and kill switch status.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "donut_kill_switch",
+    description:
+      "Emergency kill switch to halt all trading. When enabled, all donut_execute calls will fail. Use to immediately stop trading activity.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "true to enable kill switch (halt trading), false to disable",
+        },
+        reason: {
+          type: "string",
+          description: "Optional reason for enabling kill switch (e.g., 'Market crash', 'Manual pause')",
+        },
+      },
+      required: ["enabled"],
+    },
+  },
 ];
 
 // ============================================================================
@@ -866,6 +1037,108 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "donut_trending_topics": {
         const result = await handleTrendingTopics({
           limit: args?.limit as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      // ============================================================================
+      // Workflow Tools (Agent Trust Layer)
+      // ============================================================================
+
+      case "donut_research": {
+        const result = await handleResearch({
+          query: args?.query as string,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_plan": {
+        const result = await handlePlan({
+          thesis: args?.thesis as string,
+          token: args?.token as string,
+          direction: args?.direction as "long" | "short",
+          riskPercent: args?.riskPercent as number,
+          timeHorizon: args?.timeHorizon as string | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_execute": {
+        const result = await handleExecute({
+          planId: args?.planId as string,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_report": {
+        const result = await handleReport({
+          executionId: args?.executionId as string,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      // ============================================================================
+      // Policy Engine Tools
+      // ============================================================================
+
+      case "donut_pretrade_check": {
+        const planId = args?.planId as string;
+        if (!planId) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ success: false, error: "planId is required" }, null, 2) }],
+            isError: true,
+          };
+        }
+        const plan = loadPlan(planId);
+        if (!plan) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ success: false, error: `Plan not found: ${planId}` }, null, 2) }],
+            isError: true,
+          };
+        }
+        const result = checkPolicy(plan);
+        // Update the plan with pretrade status
+        plan.pretradeStatus = result.passed ? "passed" : "failed";
+        plan.pretradeViolations = result.violations;
+        savePlan(plan);
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: true, planId, ...result }, null, 2) }],
+        };
+      }
+
+      case "donut_policy_set": {
+        const result = handlePolicySet({
+          maxPositionSize: args?.maxPositionSize as number | undefined,
+          maxPortfolioRisk: args?.maxPortfolioRisk as number | undefined,
+          maxAssetConcentration: args?.maxAssetConcentration as number | undefined,
+          cooldownMinutes: args?.cooldownMinutes as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_policy_get": {
+        const result = handlePolicyGet();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_kill_switch": {
+        const result = handleKillSwitch({
+          enabled: args?.enabled as boolean,
+          reason: args?.reason as string | undefined,
         });
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
