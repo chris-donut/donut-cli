@@ -1,5 +1,9 @@
 /**
  * Setup Command - Interactive first-run configuration wizard
+ *
+ * Now offers Turnkey authentication (Google OAuth) as the recommended
+ * first option for wallet provisioning, with private key setup as
+ * an advanced alternative.
  */
 
 import { Command } from "commander";
@@ -9,6 +13,8 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
+import { hasCredentials, loadCredentials } from "../../core/credentials.js";
+import { getWalletServiceClient } from "../../integrations/wallet-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,6 +28,9 @@ interface SetupStatus {
   bunVersion: string | null;
   buildExists: boolean;
   globallyLinked: boolean;
+  turnkeyAuthenticated: boolean;
+  turnkeyEmail?: string;
+  turnkeyWallets?: Array<{ chain: string; address: string }>;
   backendsConfigured: {
     donutAgents: boolean;
     donutBackend: boolean;
@@ -81,6 +90,23 @@ function checkStatus(): SetupStatus {
   const whichDonut = safeExec("which donut") || safeExec("where donut");
   globallyLinked = !!whichDonut && whichDonut.length > 0;
 
+  // Check Turnkey authentication status
+  let turnkeyAuthenticated = false;
+  let turnkeyEmail: string | undefined;
+  let turnkeyWallets: Array<{ chain: string; address: string }> | undefined;
+
+  if (hasCredentials()) {
+    const credentials = loadCredentials();
+    if (credentials) {
+      turnkeyAuthenticated = true;
+      turnkeyEmail = credentials.userEmail;
+      turnkeyWallets = credentials.wallets?.map((w) => ({
+        chain: w.chain,
+        address: w.address,
+      }));
+    }
+  }
+
   return {
     envExists,
     apiKeyConfigured,
@@ -89,6 +115,9 @@ function checkStatus(): SetupStatus {
     bunVersion,
     buildExists: existsSync(distPath),
     globallyLinked,
+    turnkeyAuthenticated,
+    turnkeyEmail,
+    turnkeyWallets,
     backendsConfigured,
   };
 }
@@ -108,6 +137,26 @@ function printStatus(status: SetupStatus): void {
   console.log(
     `  Bun:         ${status.bunVersion ? chalk.green(`v${status.bunVersion}`) : chalk.yellow("Not found (optional)")}`
   );
+
+  // Authentication (Turnkey)
+  console.log(chalk.bold("\nWallet Authentication"));
+  if (status.turnkeyAuthenticated) {
+    console.log(
+      `  Turnkey:     ${chalk.green("✓ Authenticated")} ${chalk.gray(`(${status.turnkeyEmail})`)}`
+    );
+    if (status.turnkeyWallets && status.turnkeyWallets.length > 0) {
+      for (const wallet of status.turnkeyWallets) {
+        const shortAddr = `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
+        console.log(
+          `    ${chalk.cyan(wallet.chain.toUpperCase())}: ${chalk.gray(shortAddr)}`
+        );
+      }
+    }
+  } else {
+    console.log(
+      `  Turnkey:     ${chalk.yellow("✗ Not authenticated")} ${chalk.gray("(run 'donut auth login')")}`
+    );
+  }
 
   // Configuration
   console.log(chalk.bold("\nConfiguration"));
@@ -265,7 +314,7 @@ export async function runSetupWizard(): Promise<void> {
   console.log(chalk.cyan("║          Donut CLI Setup Wizard                   ║"));
   console.log(chalk.cyan("╚══════════════════════════════════════════════════╝\n"));
 
-  const status = checkStatus();
+  let status = checkStatus();
 
   // Step 1: Create .env if needed
   console.log(chalk.bold("Step 1: Environment Configuration\n"));
@@ -276,8 +325,59 @@ export async function runSetupWizard(): Promise<void> {
     console.log(chalk.green("✓ .env file exists"));
   }
 
-  // Step 2: Configure API key
-  console.log(chalk.bold("\nStep 2: API Key Configuration\n"));
+  // Step 2: Wallet Authentication (Turnkey)
+  console.log(chalk.bold("\nStep 2: Wallet Authentication\n"));
+
+  if (!status.turnkeyAuthenticated) {
+    console.log(chalk.cyan("  Login with Google (Recommended)"));
+    console.log(chalk.gray("    Automatically provisions secure HSM-backed wallets"));
+    console.log(chalk.gray("    No private key management required\n"));
+    console.log(chalk.gray("  Or configure private keys manually (Advanced)"));
+    console.log(chalk.gray("    Set SOLANA_PRIVATE_KEY, BASE_PRIVATE_KEY in .env\n"));
+
+    const useGoogleLogin = await confirm("Login with Google?", true);
+
+    if (useGoogleLogin) {
+      console.log(chalk.gray("\nStarting Google OAuth flow..."));
+      try {
+        // Import the auth handler dynamically to avoid circular dependencies
+        const { handleLogin } = await import("./auth.js");
+        await handleLogin();
+
+        // Re-check status after login
+        status = checkStatus();
+
+        if (status.turnkeyAuthenticated) {
+          console.log(chalk.green("\n✓ Wallet authentication complete!"));
+          if (status.turnkeyWallets && status.turnkeyWallets.length > 0) {
+            console.log(chalk.gray("  Your wallet addresses:"));
+            for (const wallet of status.turnkeyWallets) {
+              const shortAddr = `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
+              console.log(`    ${chalk.cyan(wallet.chain.toUpperCase())}: ${shortAddr}`);
+            }
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.yellow(`\n! Google login skipped: ${message}`));
+        console.log(chalk.gray("  You can run 'donut auth login' later."));
+      }
+    } else {
+      console.log(chalk.gray("\nSkipped. Configure private keys in .env for manual wallet setup."));
+      console.log(chalk.gray("Or run 'donut auth login' later to use Google authentication."));
+    }
+  } else {
+    console.log(chalk.green(`✓ Authenticated as ${status.turnkeyEmail}`));
+    if (status.turnkeyWallets && status.turnkeyWallets.length > 0) {
+      for (const wallet of status.turnkeyWallets) {
+        const shortAddr = `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`;
+        console.log(`  ${chalk.cyan(wallet.chain.toUpperCase())}: ${chalk.gray(shortAddr)}`);
+      }
+    }
+  }
+
+  // Step 3: Configure API key
+  console.log(chalk.bold("\nStep 3: API Key Configuration\n"));
 
   if (!status.apiKeyConfigured) {
     console.log(chalk.yellow("An Anthropic API key is required for AI features."));
@@ -305,8 +405,8 @@ export async function runSetupWizard(): Promise<void> {
     console.log(chalk.green("✓ API key already configured"));
   }
 
-  // Step 3: Optional backends
-  console.log(chalk.bold("\nStep 3: Backend Configuration (Optional)\n"));
+  // Step 4: Optional backends
+  console.log(chalk.bold("\nStep 4: Backend Configuration (Optional)\n"));
   console.log(chalk.gray("Backends enable live trading and backtesting features."));
   console.log(chalk.gray("Skip this if you're just exploring.\n"));
 
@@ -361,8 +461,8 @@ export async function runSetupWizard(): Promise<void> {
     }
   }
 
-  // Step 4: Build if needed
-  console.log(chalk.bold("\nStep 4: Build Project\n"));
+  // Step 5: Build if needed
+  console.log(chalk.bold("\nStep 5: Build Project\n"));
 
   if (!status.buildExists) {
     const shouldBuild = await confirm("Build the project now?", true);
@@ -381,8 +481,8 @@ export async function runSetupWizard(): Promise<void> {
     console.log(chalk.green("✓ Project already built"));
   }
 
-  // Step 5: Global installation
-  console.log(chalk.bold("\nStep 5: Global CLI Installation\n"));
+  // Step 6: Global installation
+  console.log(chalk.bold("\nStep 6: Global CLI Installation\n"));
 
   if (!status.globallyLinked) {
     const shouldLink = await confirm("Install 'donut' command globally?", true);

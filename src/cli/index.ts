@@ -12,6 +12,7 @@ export { registerDemoCommands } from "./commands/demo.js";
 export { registerStrategyCommands } from "./commands/strategy.js";
 export { registerBacktestCommands } from "./commands/backtest.js";
 export { registerSetupCommands } from "./commands/setup.js";
+export { registerAuthCommands } from "./commands/auth.js";
 
 // Theme exports (for use in other command modules)
 export {

@@ -1,12 +1,28 @@
 /**
- * Hyperliquid Perps Integration
+ * Hyperliquid Perps Integration with Auth Mode Awareness
  *
  * Provides perpetual futures trading on Hyperliquid DEX.
+ *
+ * Authentication Modes:
+ * - Turnkey: Reports Turnkey auth status but STILL requires HYPERLIQUID_PRIVATE_KEY
+ *   (Hyperliquid SDK doesn't support external signers - keys are used internally)
+ * - Legacy: Uses HYPERLIQUID_PRIVATE_KEY environment variable
+ *
+ * NOTE: Unlike Solana/Base wallets where we can route signing to wallet-service,
+ * the Hyperliquid SDK handles signing internally. Until the SDK supports external
+ * signers, users must configure HYPERLIQUID_PRIVATE_KEY even when using Turnkey.
+ *
  * Security: API keys loaded only at execution time, never logged or cached.
  */
 
 import { Hyperliquid } from "hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
+import {
+  getTurnkeyAuthProvider,
+  shouldUseTurnkey,
+  getAuthModeLabel,
+  type AuthMode,
+} from "../auth/turnkey.js";
 
 // Hyperliquid client instance (created lazily)
 let hlClient: InstanceType<typeof Hyperliquid> | null = null;
@@ -29,7 +45,7 @@ function loadCredentials(): { privateKey: string; testnet: boolean } | null {
 /**
  * Get wallet address from private key
  */
-function getWalletAddress(privateKey: string): string {
+function getWalletAddressFromKey(privateKey: string): string {
   const formattedKey = privateKey.startsWith("0x")
     ? (privateKey as `0x${string}`)
     : (`0x${privateKey}` as `0x${string}`);
@@ -38,7 +54,32 @@ function getWalletAddress(privateKey: string): string {
 }
 
 /**
+ * Get wallet address (checks Turnkey first, then local key)
+ */
+function getEffectiveWalletAddress(): string | null {
+  // If using Turnkey, try to get EVM address from credentials
+  if (shouldUseTurnkey()) {
+    const provider = getTurnkeyAuthProvider();
+    const turnkeyAddress = provider.getEvmAddress();
+    if (turnkeyAddress) {
+      return turnkeyAddress;
+    }
+  }
+
+  // Fall back to private key-derived address
+  const creds = loadCredentials();
+  if (creds) {
+    return getWalletAddressFromKey(creds.privateKey);
+  }
+
+  return null;
+}
+
+/**
  * Get or create Hyperliquid client
+ *
+ * NOTE: This always requires HYPERLIQUID_PRIVATE_KEY because the SDK
+ * handles signing internally and doesn't support external signers.
  */
 async function getClient(): Promise<InstanceType<typeof Hyperliquid> | null> {
   if (hlClient) {
@@ -52,7 +93,7 @@ async function getClient(): Promise<InstanceType<typeof Hyperliquid> | null> {
 
   try {
     // Get wallet address from private key
-    walletAddress = getWalletAddress(creds.privateKey);
+    walletAddress = getWalletAddressFromKey(creds.privateKey);
 
     hlClient = new Hyperliquid({
       privateKey: creds.privateKey,
@@ -76,6 +117,7 @@ export interface HLBalanceResult {
   success: boolean;
   connected: boolean;
   network: "mainnet" | "testnet";
+  authMode?: string;
   account?: {
     address: string;
     totalAccountValue: string;
@@ -118,6 +160,7 @@ export interface HLOpenResult {
   price?: string;
   leverage?: string;
   liquidationPrice?: string;
+  authMode?: string;
   error?: string;
 }
 
@@ -127,6 +170,7 @@ export interface HLCloseResult {
   market: string;
   closedSize?: string;
   realizedPnl?: string;
+  authMode?: string;
   error?: string;
 }
 
@@ -134,7 +178,83 @@ export interface HLPositionsResult {
   success: boolean;
   positions: HLPosition[];
   totalUnrealizedPnl: string;
+  authMode?: string;
   error?: string;
+}
+
+export interface HLAuthStatus {
+  turnkeyAuthenticated: boolean;
+  turnkeyAddress?: string;
+  hyperliquidKeyConfigured: boolean;
+  hyperliquidAddress?: string;
+  ready: boolean;
+  message: string;
+}
+
+// ============================================================================
+// Auth Status Function
+// ============================================================================
+
+/**
+ * Get Hyperliquid authentication status
+ *
+ * This helps users understand the auth state since Hyperliquid
+ * requires its own private key even when Turnkey is authenticated.
+ */
+export function getHLAuthStatus(): HLAuthStatus {
+  const isTurnkey = shouldUseTurnkey();
+  const turnkeyAddress = isTurnkey
+    ? getTurnkeyAuthProvider().getEvmAddress()
+    : null;
+  const creds = loadCredentials();
+  const hlAddress = creds ? getWalletAddressFromKey(creds.privateKey) : null;
+
+  // Check if addresses match (user configured correct key for Turnkey wallet)
+  const addressesMatch = turnkeyAddress && hlAddress
+    ? turnkeyAddress.toLowerCase() === hlAddress.toLowerCase()
+    : false;
+
+  let message: string;
+  if (isTurnkey && creds) {
+    if (addressesMatch) {
+      message = "Turnkey authenticated. HYPERLIQUID_PRIVATE_KEY matches Turnkey wallet.";
+    } else {
+      message = "Turnkey authenticated but HYPERLIQUID_PRIVATE_KEY uses different address. " +
+        "Configure the key for your Turnkey wallet or use `donut auth logout` for legacy mode.";
+    }
+  } else if (isTurnkey && !creds) {
+    message = "Turnkey authenticated but HYPERLIQUID_PRIVATE_KEY not configured. " +
+      "Hyperliquid SDK requires private key for signing. Export key from Turnkey or configure separately.";
+  } else if (creds) {
+    message = "Using legacy mode with HYPERLIQUID_PRIVATE_KEY.";
+  } else {
+    message = "HYPERLIQUID_PRIVATE_KEY not configured. Add it to your .env file.";
+  }
+
+  return {
+    turnkeyAuthenticated: isTurnkey,
+    turnkeyAddress: turnkeyAddress || undefined,
+    hyperliquidKeyConfigured: !!creds,
+    hyperliquidAddress: hlAddress || undefined,
+    ready: !!creds,
+    message,
+  };
+}
+
+/**
+ * Get human-readable auth mode label for Hyperliquid
+ */
+function getHLAuthModeLabel(): string {
+  const status = getHLAuthStatus();
+
+  if (status.turnkeyAuthenticated && status.hyperliquidKeyConfigured) {
+    return "Turnkey + Local Key";
+  } else if (status.turnkeyAuthenticated) {
+    return "Turnkey (key required)";
+  } else if (status.hyperliquidKeyConfigured) {
+    return "Legacy (local key)";
+  }
+  return "Not configured";
 }
 
 // ============================================================================
@@ -146,12 +266,26 @@ export interface HLPositionsResult {
  */
 export async function handleHLBalance(): Promise<HLBalanceResult> {
   const creds = loadCredentials();
+  const authMode = getHLAuthModeLabel();
+
   if (!creds) {
+    // Check if Turnkey authenticated to give more helpful error
+    if (shouldUseTurnkey()) {
+      return {
+        success: false,
+        connected: false,
+        network: "mainnet",
+        authMode,
+        error: "Turnkey authenticated but HYPERLIQUID_PRIVATE_KEY not configured. " +
+          "Hyperliquid SDK requires private key for signing operations.",
+      };
+    }
     return {
       success: false,
       connected: false,
       network: "mainnet",
-      error: "HYPERLIQUID_PRIVATE_KEY not configured. Add it to your .env file.",
+      authMode,
+      error: "HYPERLIQUID_PRIVATE_KEY not configured. Add it to your .env file or run `donut auth login`.",
     };
   }
 
@@ -161,6 +295,7 @@ export async function handleHLBalance(): Promise<HLBalanceResult> {
       success: false,
       connected: false,
       network: creds.testnet ? "testnet" : "mainnet",
+      authMode,
       error: "Failed to connect to Hyperliquid",
     };
   }
@@ -174,6 +309,7 @@ export async function handleHLBalance(): Promise<HLBalanceResult> {
         success: false,
         connected: true,
         network: creds.testnet ? "testnet" : "mainnet",
+        authMode,
         error: "Failed to fetch account state",
       };
     }
@@ -203,6 +339,7 @@ export async function handleHLBalance(): Promise<HLBalanceResult> {
       success: true,
       connected: true,
       network: creds.testnet ? "testnet" : "mainnet",
+      authMode,
       account: {
         address: walletAddress,
         totalAccountValue: userState.marginSummary?.accountValue || "0",
@@ -218,6 +355,7 @@ export async function handleHLBalance(): Promise<HLBalanceResult> {
       success: false,
       connected: true,
       network: creds.testnet ? "testnet" : "mainnet",
+      authMode,
       error: `Failed to fetch account: ${message}`,
     };
   }
@@ -231,14 +369,30 @@ export async function handleHLBalance(): Promise<HLBalanceResult> {
  * Open a perpetual position on Hyperliquid
  */
 export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> {
+  const authMode = getHLAuthModeLabel();
   const client = await getClient();
+
   if (!client || !walletAddress) {
+    // Check if Turnkey authenticated to give more helpful error
+    if (shouldUseTurnkey()) {
+      return {
+        success: false,
+        market: params.market,
+        side: params.side,
+        size: params.size.toString(),
+        orderType: params.orderType || "market",
+        authMode,
+        error: "Turnkey authenticated but HYPERLIQUID_PRIVATE_KEY not configured. " +
+          "Hyperliquid SDK requires private key for order signing.",
+      };
+    }
     return {
       success: false,
       market: params.market,
       side: params.side,
       size: params.size.toString(),
       orderType: params.orderType || "market",
+      authMode,
       error: "HYPERLIQUID_PRIVATE_KEY not configured or connection failed",
     };
   }
@@ -257,6 +411,7 @@ export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> 
         side: params.side,
         size: params.size.toString(),
         orderType: params.orderType || "market",
+        authMode,
         error: `Market ${params.market} not found. Available: ${meta?.universe?.map((m: any) => m.name).join(", ")}`,
       };
     }
@@ -271,6 +426,7 @@ export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> 
         side: params.side,
         size: params.size.toString(),
         orderType: params.orderType || "market",
+        authMode,
         error: `Leverage ${leverage}x exceeds market max of ${maxLeverage}x`,
       };
     }
@@ -290,6 +446,7 @@ export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> 
         side: params.side,
         size: params.size.toString(),
         orderType,
+        authMode,
         error: `Could not fetch current price for ${params.market}`,
       };
     }
@@ -309,6 +466,7 @@ export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> 
         side: params.side,
         size: params.size.toString(),
         orderType,
+        authMode,
         error: "Price is required for limit orders",
       };
     }
@@ -343,6 +501,7 @@ export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> 
       price: limitPrice.toString(),
       leverage: leverage.toString(),
       liquidationPrice: position?.position?.liquidationPx || undefined,
+      authMode,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -352,6 +511,7 @@ export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> 
       side: params.side,
       size: params.size.toString(),
       orderType: params.orderType || "market",
+      authMode,
       error: `Order failed: ${message}`,
     };
   }
@@ -361,11 +521,24 @@ export async function handleHLOpen(params: HLOpenParams): Promise<HLOpenResult> 
  * Close a perpetual position on Hyperliquid
  */
 export async function handleHLClose(market: string): Promise<HLCloseResult> {
+  const authMode = getHLAuthModeLabel();
   const client = await getClient();
+
   if (!client || !walletAddress) {
+    // Check if Turnkey authenticated to give more helpful error
+    if (shouldUseTurnkey()) {
+      return {
+        success: false,
+        market,
+        authMode,
+        error: "Turnkey authenticated but HYPERLIQUID_PRIVATE_KEY not configured. " +
+          "Hyperliquid SDK requires private key for order signing.",
+      };
+    }
     return {
       success: false,
       market,
+      authMode,
       error: "HYPERLIQUID_PRIVATE_KEY not configured or connection failed",
     };
   }
@@ -381,6 +554,7 @@ export async function handleHLClose(market: string): Promise<HLCloseResult> {
       return {
         success: false,
         market,
+        authMode,
         error: `No open position found for ${market}`,
       };
     }
@@ -397,6 +571,7 @@ export async function handleHLClose(market: string): Promise<HLCloseResult> {
       return {
         success: false,
         market,
+        authMode,
         error: `Could not fetch current price for ${market}`,
       };
     }
@@ -425,12 +600,14 @@ export async function handleHLClose(market: string): Promise<HLCloseResult> {
       market,
       closedSize: size.toString(),
       realizedPnl: unrealizedPnl,
+      authMode,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
       success: false,
       market,
+      authMode,
       error: `Close failed: ${message}`,
     };
   }
@@ -441,12 +618,14 @@ export async function handleHLClose(market: string): Promise<HLCloseResult> {
  */
 export async function handleHLPositions(): Promise<HLPositionsResult> {
   const result = await handleHLBalance();
+  const authMode = getHLAuthModeLabel();
 
   if (!result.success) {
     return {
       success: false,
       positions: [],
       totalUnrealizedPnl: "0",
+      authMode,
       error: result.error,
     };
   }
@@ -460,6 +639,7 @@ export async function handleHLPositions(): Promise<HLPositionsResult> {
     success: true,
     positions,
     totalUnrealizedPnl,
+    authMode,
   };
 }
 
@@ -512,4 +692,19 @@ export async function handleHLMarkets(): Promise<{
       error: `Failed to fetch markets: ${message}`,
     };
   }
+}
+
+/**
+ * Get current authentication mode for Hyperliquid
+ */
+export function getHLAuthenticationMode(): AuthMode {
+  return getTurnkeyAuthProvider().getAuthMode();
+}
+
+/**
+ * Get effective wallet address for Hyperliquid operations
+ * Returns Turnkey address if authenticated, otherwise key-derived address
+ */
+export function getHLWalletAddress(): string | null {
+  return getEffectiveWalletAddress();
 }

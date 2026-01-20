@@ -42,11 +42,6 @@ After installing donut-cli, add to your Claude Code settings (`~/.claude/setting
       "command": "donut-mcp",
       "env": {
         "ANTHROPIC_API_KEY": "your-key-here",
-        "SOLANA_PRIVATE_KEY": "your-base58-private-key",
-        "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com",
-        "BASE_PRIVATE_KEY": "your-hex-private-key",
-        "HYPERLIQUID_PRIVATE_KEY": "your-hex-private-key",
-        "POLYGON_PRIVATE_KEY": "your-hex-private-key",
         "NEYNAR_API_KEY": "your-neynar-api-key"
       }
     }
@@ -54,7 +49,22 @@ After installing donut-cli, add to your Claude Code settings (`~/.claude/setting
 }
 ```
 
-**Security Note:** Private keys should never be shared or committed to version control. Keys are only loaded at execution time and are never logged.
+**Authentication Options:**
+
+1. **Turnkey (Recommended):** Run `donut auth login` to authenticate with Google OAuth. Your Turnkey wallets are automatically used for all operations. No private keys needed in config.
+
+2. **Legacy (Private Keys):** Add keys directly to the env config:
+```json
+{
+  "env": {
+    "SOLANA_PRIVATE_KEY": "your-base58-private-key",
+    "BASE_PRIVATE_KEY": "your-hex-private-key",
+    "HYPERLIQUID_PRIVATE_KEY": "your-hex-private-key"
+  }
+}
+```
+
+**Security Note:** Private keys should never be shared or committed to version control. When using Turnkey, keys remain in HSM infrastructure and are never exposed.
 
 ### Available Tools
 
@@ -195,6 +205,50 @@ node dist/index.js chat
 
 > **Tip:** Run `npm link` to use the `donut` command globally instead of `node dist/index.js`.
 
+## Authentication
+
+### Google OAuth (Recommended)
+
+The easiest way to get started is with Google OAuth authentication. This automatically provisions secure HSM-backed wallets via [Turnkey](https://turnkey.com) - no private key management required.
+
+```bash
+# Login with Google
+donut auth login
+
+# Check authentication status
+donut auth status
+
+# Logout
+donut auth logout
+```
+
+**Benefits:**
+- **No private keys to manage** - Keys are stored in hardware security modules (HSM)
+- **Multi-chain support** - Automatically provisions Solana and EVM wallets
+- **Secure by design** - Keys never leave Turnkey's HSM infrastructure
+- **< 30 seconds to trading** - From login to first trade
+
+After logging in, your wallet addresses are displayed and all wallet tools automatically use your Turnkey wallets.
+
+### Advanced: Private Key Configuration
+
+For users who prefer to manage their own keys, you can configure private keys directly in your `.env` file. This method is recommended only for advanced users.
+
+```bash
+# Solana (base58-encoded)
+SOLANA_PRIVATE_KEY=your-base58-key
+
+# Base/EVM (hex-encoded)
+BASE_PRIVATE_KEY=your-hex-key
+
+# Hyperliquid (hex-encoded) - required for perps trading
+HYPERLIQUID_PRIVATE_KEY=your-hex-key
+```
+
+**Security Note:** If you're authenticated with Turnkey, the CLI will use your Turnkey wallets. Private key environment variables are only used when not logged in via Google OAuth.
+
+See the [On-Chain Trading](#on-chain-trading) section in `.env.example` for detailed key format instructions.
+
 ## Installation
 
 See [Installation Guide](./docs/INSTALLATION.md) for detailed setup instructions.
@@ -265,6 +319,9 @@ donut demo trades
 | Command | Description |
 |---------|-------------|
 | `donut setup` | First-run setup wizard |
+| `donut auth login` | Login with Google OAuth (provisions Turnkey wallets) |
+| `donut auth status` | Check authentication status and wallet addresses |
+| `donut auth logout` | Logout and clear credentials |
 | `donut chat` | Interactive AI chat mode |
 | `donut start` | Start a new trading session |
 | `donut status` | Show session status |

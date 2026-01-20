@@ -27,6 +27,7 @@ import {
   registerStrategyCommands,
   registerBacktestCommands,
   registerSetupCommands,
+  registerAuthCommands,
   BANNER,
   BANNER_WITH_HINTS,
   playDonutAnimation,
@@ -74,6 +75,7 @@ registerPaperTradingCommands(program);
 registerNotificationCommands(program);
 registerDemoCommands(program);
 registerSetupCommands(program);
+registerAuthCommands(program);
 
 // ============================================================================
 // Interactive Mode
