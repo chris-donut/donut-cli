@@ -34,3 +34,6 @@ export {
   separator,
   sectionHeader,
 } from "./theme.js";
+
+// Animation exports
+export { playDonutAnimation } from "./animation.js";
