@@ -252,7 +252,6 @@ print_next_steps() {
     echo "  Edit .env to configure:"
     echo "  - ANTHROPIC_API_KEY   # Required for AI features"
     echo "  - HUMMINGBOT_URL      # Optional: Live trading backend"
-    echo "  - NOFX_API_URL        # Optional: Backtesting server"
     echo ""
     echo -e "${BOLD}Documentation:${NC}"
     echo ""

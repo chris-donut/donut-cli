@@ -425,8 +425,6 @@ Configure behavior via environment variables:
 |----------|-------------|---------|
 | `ANTHROPIC_API_KEY` | Claude API key (required for AI features) | - |
 | `HUMMINGBOT_URL` | Hummingbot Dashboard URL | - |
-| `NOFX_API_URL` | nofx backtest server URL | - |
-| `NOFX_AUTH_TOKEN` | nofx authentication token | - |
 | `LOG_LEVEL` | Logging level (`debug`, `info`, `warn`, `error`) | `info` |
 | `SESSION_DIR` | Session storage directory | `.sessions` |
 | `HARNESS_WORKING_DIR` | Python harness directory | - |

@@ -74,8 +74,6 @@ Edit `.env` with your configuration:
 ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
 
 # Optional: Backend Servers
-NOFX_API_URL=http://localhost:8080          # nofx backtest server
-NOFX_AUTH_TOKEN=                            # Auth token if required
 HUMMINGBOT_URL=http://localhost:5000        # Hummingbot Dashboard
 
 # Optional: Python Integration
@@ -141,23 +139,7 @@ Donut CLI works without backends for:
 donut chat
 ```
 
-### Option B: nofx Backtest Server
-
-For backtesting capabilities:
-
-```bash
-# Start the nofx server (separate terminal)
-cd /path/to/nofx
-go run ./cmd/server
-
-# Configure in .env
-NOFX_API_URL=http://localhost:8080
-
-# Verify connection
-donut backtest status
-```
-
-### Option C: Hummingbot Dashboard
+### Option B: Hummingbot Dashboard
 
 For live and paper trading:
 
@@ -274,9 +256,6 @@ bun run build
 ### Backend Connection Issues
 
 ```bash
-# Test nofx connection
-curl http://localhost:8080/health
-
 # Test Hummingbot connection
 curl http://localhost:5000/api/status
 
