@@ -20,7 +20,7 @@ A comprehensive map of CLI, TUI, and Agent functionalities for the unified tradi
 │           ▼                       ▼                       ▼                  │
 │  ┌──────────────────────────────────────────────────────────────────┐       │
 │  │                       MCP SERVERS (Tools)                         │       │
-│  │  Hummingbot │ Nofx │ Orchestrator │ Sentiment │ Thesis            │       │
+│  │  Hummingbot │ Orchestrator │ Sentiment │ Thesis │ Donut           │       │
 │  └──────────────────────────────────────────────────────────────────┘       │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -227,7 +227,7 @@ Entry point: `src/mcp-servers/`
 |--------|----------------|---------|
 | **Orchestrator** | spawn_agent, get_agent_status, synthesize_results | Multi-agent coordination |
 | **Hummingbot** | hb_backtest_*, hb_strategy_* | Hummingbot Dashboard integration |
-| **Nofx** | backtest_start, backtest_status, backtest_get_* | Go backtest engine |
+| **Donut** | donut_strategy_*, donut_backtest_*, donut_portfolio | Donut backend integration |
 | **Sentiment** | get_sentiment_data, get_sentiment_config | Social sentiment analysis |
 | **Thesis** | thesis_create, thesis_update, thesis_check | Thesis management |
 
@@ -245,7 +245,7 @@ User Input
                     │           ┌─────────────┐
                     └───────────│   Backend   │
                                 │ (Hummingbot │
-                                │  or Nofx)   │
+                                │  or Donut)  │
                                 └─────────────┘
 ```
 
@@ -380,7 +380,7 @@ interface SessionState {
             ┌───────────────┐
             │   BACKEND     │
             │ Hummingbot/   │
-            │    Nofx       │
+            │    Donut      │
             └───────────────┘
 ```
 

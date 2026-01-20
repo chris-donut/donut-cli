@@ -21,7 +21,7 @@ import {
 
 import {
   getHummingbotClient,
-  getNofxClient,
+  getDonutAgentsClient,
   clearClientCache,
   getCacheSize,
   checkBackendHealth,
@@ -155,8 +155,8 @@ async function testClientFactory() {
   const hbClient = getHummingbotClient();
   console.log(`  Created Hummingbot client`);
 
-  const nofxClient = getNofxClient();
-  console.log(`  Created nofx client`);
+  const donutAgentsClient = getDonutAgentsClient();
+  console.log(`  Created Donut Agents client`);
 
   // Check caching
   const hbClient2 = getHummingbotClient();
@@ -169,8 +169,8 @@ async function testClientFactory() {
   const hbHealth = await checkBackendHealth("hummingbot");
   console.log(`    Hummingbot: available=${hbHealth.available}${hbHealth.error ? `, error=${hbHealth.error}` : ""}`);
 
-  const nofxHealth = await checkBackendHealth("nofx");
-  console.log(`    nofx: available=${nofxHealth.available}${nofxHealth.error ? `, error=${nofxHealth.error}` : ""}`);
+  const donutAgentsHealth = await checkBackendHealth("donutAgents");
+  console.log(`    Donut Agents: available=${donutAgentsHealth.available}${donutAgentsHealth.error ? `, error=${donutAgentsHealth.error}` : ""}`);
 
   console.log("  ✓ Client Factory working correctly");
 }

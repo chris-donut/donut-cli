@@ -228,7 +228,6 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 # Optional backends
 HUMMINGBOT_URL=http://localhost:5000
-NOFX_API_URL=http://localhost:8080
 
 # Settings
 LOG_LEVEL=info
@@ -322,7 +321,6 @@ Donut CLI supports multiple backends:
 |---------|---------|----------|
 | **Standalone** | Strategy design, learning | No |
 | **Hummingbot Dashboard** | Live/paper trading | Optional |
-| **nofx Server** | Backtesting | Optional |
 
 ## Contributing
 
