@@ -23,6 +23,7 @@ import {
   registerBacktestCommands,
   registerSetupCommands,
   BANNER,
+  playDonutAnimation,
 } from "./cli/index.js";
 import { startInteractiveMode } from "./tui/index.js";
 import { registerShutdownHandler, onShutdown } from "./core/shutdown.js";
@@ -71,6 +72,8 @@ program
   .command("chat")
   .description("Start interactive chat mode with Claude AI")
   .action(async () => {
+    // Play the spinning donut animation on startup
+    await playDonutAnimation();
     console.log(BANNER);
     try {
       await startInteractiveMode();
