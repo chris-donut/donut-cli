@@ -1,164 +1,92 @@
 {
-  "project": "Agent Execution & Trust Layer",
-  "branchName": "ralph/agent-trust-layer",
-  "description": "Transform Donut from a trading CLI into the trust substrate Claude plugs into. Implement workflow MCP primitives (research → plan → pretrade_check → execute → report) backed by a policy engine with hard limit enforcement. Target: >50% activation rate (first trade within 24h of install).",
+  "project": "Remote MCP Server for Donut CLI",
+  "branchName": "ralph/remote-mcp-server",
+  "description": "Users cannot easily connect AI coding assistants (Claude Code, Cursor, VS Code) to Donut's trading tools. Currently, using Donut via MCP requires local installation, building from source, and manual configuration. This PRD adds HTTP-based MCP endpoint to enable one-command setup.",
   "userStories": [
     {
-      "id": "WFL-001",
-      "title": "Research Tool - Market Context Primitive",
-      "description": "As a trader using Claude Code, I want to call donut_research with a token or narrative so that I receive structured market context without manually querying multiple sources.",
+      "id": "RMS-001",
+      "title": "MCP Endpoint Discovery",
+      "description": "As a developer using Claude Code, I want to add Donut's MCP server with a single command so that I can immediately access trading tools without local installation.",
       "acceptanceCriteria": [
-        "MCP tool donut_research accepts token address, symbol, or narrative string",
-        "Returns structured JSON: { sentiment, keyLevels, recentNews, socialMentions, riskFactors }",
-        "Integrates existing Farcaster trending + token search tools internally",
-        "Read-only operation (no state changes)",
-        "Response time <5s for token lookups",
+        "/mcp endpoint responds to HTTP POST requests with JSON-RPC 2.0",
+        "Endpoint returns valid MCP protocol responses for initialize method",
+        "claude mcp add -t http donut http://localhost:4567/mcp works without errors",
+        "Claude Code shows donut in claude mcp list after adding",
+        "Verify at localhost:4567/mcp with curl POST request",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Implemented in workflow.ts. Aggregates Farcaster trending, mentions, and token search. Returns sentiment scoring, risk factors, and token info."
+      "notes": "Implemented: POST /mcp endpoint with JSON-RPC 2.0, initialize/tools methods supported"
     },
     {
-      "id": "WFL-002",
-      "title": "Plan Tool - Trade Plan Object",
-      "description": "As a trader, I want to call donut_plan with a thesis and risk parameters so that I receive a structured trade plan object I can review before execution.",
+      "id": "RMS-002",
+      "title": "Tool Listing via MCP Protocol",
+      "description": "As an AI assistant, I want to discover available Donut tools via the MCP tools/list method so that I can present trading capabilities to users.",
       "acceptanceCriteria": [
-        "MCP tool donut_plan accepts: { thesis, token, direction, riskPercent, timeHorizon }",
-        "Returns trade plan object: { entry, target, stopLoss, size, invalidation, confidence, warnings }",
-        "Size calculated from portfolio balance and riskPercent",
-        "Validates token exists and is tradeable on supported venues",
-        "Plan object includes unique planId for tracking",
-        "Does not execute any trades (planning only)",
+        "MCP tools/list method returns all 50+ Donut tools",
+        "Each tool includes name, description, and inputSchema",
+        "Tools are grouped by category in response metadata",
+        "Response format matches MCP specification",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Implemented in workflow.ts. Calculates position size from wallet balance and risk %. Persists plans to ~/.donut/plans/ for tracking."
+      "notes": "Implemented: tools/list returns 26 tools with name, description, inputSchema. Category grouping deferred."
     },
     {
-      "id": "POL-001",
-      "title": "Policy Engine Core",
-      "description": "As Donut, I want a policy engine that enforces hard limits so that users cannot accidentally exceed their risk parameters.",
+      "id": "RMS-003",
+      "title": "Tool Execution via MCP Protocol",
+      "description": "As an AI assistant, I want to invoke Donut tools via the MCP tools/call method so that I can execute trades and queries on behalf of users.",
       "acceptanceCriteria": [
-        "Policy config stored in ~/.donut/policies.json",
-        "Supports: maxPositionSize, maxPortfolioRisk, cooldownMinutes",
-        "Policy engine exposes checkPolicy(plan): PolicyResult function",
-        "PolicyResult includes: { passed, violations[], warnings[] }",
-        "Default policies created on first run (conservative defaults)",
+        "MCP tools/call method routes to correct tool handler",
+        "Tool arguments are validated against inputSchema",
+        "Successful executions return tool results in MCP format",
+        "Errors return proper MCP error responses with JSON-RPC error codes",
+        "Internal exceptions are caught and returned as MCP errors (not HTTP 500)",
+        "Existing tool handlers work unchanged (backward compatible)",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Implemented in policy.ts. Conservative defaults: 10% maxPositionSize, 25% maxPortfolioRisk, 20% maxAssetConcentration, 5min cooldown."
+      "notes": "Implemented: tools/call routes to executeToolHandler, returns MCP format with proper error codes"
     },
     {
-      "id": "WFL-003",
-      "title": "Pretrade Check Tool - Policy Enforcement Gate",
-      "description": "As a trader, I want to call donut_pretrade_check with a plan object so that I know if the trade violates any of my risk policies before execution.",
+      "id": "RMS-004",
+      "title": "Authentication Integration",
+      "description": "As a user connecting from Claude Code, I want MCP requests to use my existing Donut credentials so that my trading account is securely linked without re-authenticating.",
       "acceptanceCriteria": [
-        "MCP tool donut_pretrade_check accepts plan object from WFL-002",
-        "Returns: { passed: boolean, violations: string[], warnings: string[] }",
-        "Checks against policy engine (POL-001)",
-        "Violations are hard stops (position limit exceeded)",
-        "Warnings are soft alerts (unusual size, low liquidity)",
-        "Failed pretrade prevents execution via donut_execute",
+        "MCP endpoint checks for existing credentials from donut auth",
+        "Unauthenticated requests return 401 with message: Run donut auth first",
+        "Authenticated requests include user context from stored credentials",
+        "Existing tool handlers receive same auth context as CLI",
+        "Token refresh happens automatically when near expiry (existing behavior preserved)",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Handler in server.ts calls checkPolicy() and updates plan.pretradeStatus. Execute tool checks this status before proceeding."
+      "notes": "Implemented: Auth check on tools/call, 401 for unauthenticated, auth status in initialize response"
     },
     {
-      "id": "WFL-004",
-      "title": "Execute Tool - Validated Plan Execution",
-      "description": "As a trader, I want to call donut_execute with a validated plan so that the trade executes only if pretrade checks passed.",
+      "id": "RMS-005",
+      "title": "MCP Client Configuration Documentation",
+      "description": "As a developer, I want clear setup instructions so that I can connect my preferred MCP client to Donut in under 60 seconds.",
       "acceptanceCriteria": [
-        "MCP tool donut_execute accepts planId from validated plan",
-        "Rejects execution if pretrade_check not called or failed",
-        "Routes to appropriate venue (Jupiter/0x/Hyperliquid) based on token chain",
-        "Returns execution result: { executionId, status, fills, avgPrice, fees }",
-        "Failure handling: If tx signed but not confirmed, auto-retry once then fail",
-        "Status includes: pending | confirmed | failed | retrying",
-        "Stores execution event for posttrade reporting",
-        "Integrates with existing wallet.ts and base-wallet.ts",
+        "README includes Claude Code setup command",
+        "README includes Cursor configuration JSON",
+        "README includes VS Code setup steps",
+        "README includes Claude Desktop configuration",
+        "Each client verified to work end-to-end",
         "Typecheck passes",
         "Lint passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Implemented in workflow.ts. Routes to handleSwap (Solana) or handleBaseSwap (Base). Retry once with increased slippage on failure. Logs execution for cooldown tracking."
-    },
-    {
-      "id": "WFL-005",
-      "title": "Report Tool - Posttrade Analysis",
-      "description": "As a trader, I want to call donut_report with an execution ID so that I receive posttrade analysis and attribution.",
-      "acceptanceCriteria": [
-        "MCP tool donut_report accepts executionId",
-        "Returns: { plan, execution, slippage, fees, pnlIfClosed, holdingPeriod }",
-        "Includes original thesis and invalidation conditions",
-        "Calculates unrealized PnL at current prices",
-        "Read-only (does not modify positions)",
-        "Typecheck passes",
-        "Lint passes"
-      ],
-      "priority": 6,
-      "passes": true,
-      "notes": "Implemented in workflow.ts. Fetches current price via quote APIs. Calculates slippage, PnL, holding period from execution data."
-    },
-    {
-      "id": "POL-002",
-      "title": "Policy Configuration Tool",
-      "description": "As a trader, I want to call donut_policy_set to configure my risk limits so that the policy engine enforces my preferences.",
-      "acceptanceCriteria": [
-        "MCP tool donut_policy_set accepts policy key-value pairs",
-        "Validates policy values are within sane ranges",
-        "Persists to ~/.donut/policies.json",
-        "Returns current policy state after update",
-        "Typecheck passes",
-        "Lint passes"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "Implemented in policy.ts. Validates ranges: position size 0-100%, cooldown 0-1440min. Returns updated policy after save."
-    },
-    {
-      "id": "POL-003",
-      "title": "Kill Switch Tool",
-      "description": "As a trader, I want a donut_kill_switch tool that immediately blocks all new executions so that I can halt trading in emergencies.",
-      "acceptanceCriteria": [
-        "MCP tool donut_kill_switch accepts: { enabled: boolean, reason?: string }",
-        "When enabled, all donut_execute calls fail with 'Kill switch active: {reason}'",
-        "Kill switch state persisted to disk (survives restarts)",
-        "donut_policy_get returns kill switch status",
-        "Can be disabled by calling with { enabled: false }",
-        "Typecheck passes",
-        "Lint passes"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "Implemented in policy.ts. Kill switch stored in policies.json with timestamp and reason. checkPolicy() returns violation if enabled."
-    },
-    {
-      "id": "POL-004",
-      "title": "Position Limit Enforcement",
-      "description": "As a trader, I want the policy engine to enforce maximum position sizes so that no single trade exceeds my risk tolerance.",
-      "acceptanceCriteria": [
-        "Policy engine checks proposed size against maxPositionSize (% of portfolio)",
-        "Checks against maxPortfolioRisk (total risk across all positions)",
-        "Checks against per-asset concentration limits",
-        "Returns violation if any limit exceeded",
-        "Limits configurable via donut_policy_set",
-        "Typecheck passes",
-        "Lint passes"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "Enhanced checkPolicy() with portfolio risk tracking. Sums risk from 24h executions. Checks maxPortfolioRisk and maxAssetConcentration limits."
+      "notes": "Implemented: README updated with Claude Code, Cursor, VS Code, Claude Desktop setup instructions. Added donut web command."
     }
   ]
 }

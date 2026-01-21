@@ -67,7 +67,8 @@ dotenvConfig();
 // Tool Definitions
 // ============================================================================
 
-const TOOLS: Tool[] = [
+// Export TOOLS for use by web server MCP endpoint
+export const TOOLS: Tool[] = [
   {
     name: "donut_strategy_build",
     description:
@@ -737,38 +738,18 @@ const TOOLS: Tool[] = [
 ];
 
 // ============================================================================
-// Server Setup
-// ============================================================================
-
-const server = new Server(
-  {
-    name: "donut-mcp",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
-
-// ============================================================================
-// Request Handlers
+// Tool Execution Handler (Exported for Web Server MCP Endpoint)
 // ============================================================================
 
 /**
- * Handle tools/list request
+ * Execute a tool by name with given arguments.
+ * Returns MCP-formatted response with content array.
+ * Exported for use by HTTP MCP endpoint in web server.
  */
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools: TOOLS };
-});
-
-/**
- * Handle tools/call request
- */
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
+export async function executeToolHandler(
+  name: string,
+  args?: Record<string, unknown>
+): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
   try {
     switch (name) {
       case "donut_strategy_build": {
@@ -798,10 +779,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
-
-      // ============================================================================
-      // Trading Tools (Phase A: Solana)
-      // ============================================================================
 
       case "donut_balance": {
         const result = await handleWalletStatus();
@@ -855,10 +832,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      // ============================================================================
-      // Trading Tools (Phase B: Base Chain)
-      // ============================================================================
-
       case "donut_base_quote": {
         const result = await handleBaseQuote({
           fromToken: args?.fromToken as string,
@@ -884,59 +857,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "donut_detect_chain": {
-        const token = args?.token as string;
-        const chain = detectChainFromToken(token);
+        const result = detectChainFromToken(args?.token as string);
         return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              token,
-              detectedChain: chain,
-              explanation: chain === "solana"
-                ? "Base58 format detected - this appears to be a Solana address"
-                : chain === "base"
-                ? "0x format detected - this appears to be a Base/EVM address"
-                : "Unable to determine chain. Provide a full address or specify the chain explicitly.",
-            }, null, 2),
-          }],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
-
-      // ============================================================================
-      // Trading Tools (Phase C: Hyperliquid Perpetuals)
-      // ============================================================================
 
       case "donut_hl_balance": {
         const result = await handleHLBalance();
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      }
-
-      case "donut_hl_open": {
-        const result = await handleHLOpen({
-          market: args?.market as string,
-          side: args?.side as "long" | "short",
-          size: args?.size as number,
-          leverage: args?.leverage as number | undefined,
-          orderType: args?.orderType as "market" | "limit" | undefined,
-          price: args?.price as number | undefined,
-          reduceOnly: args?.reduceOnly as boolean | undefined,
-        });
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      }
-
-      case "donut_hl_close": {
-        const result = await handleHLClose(args?.market as string);
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      }
-
-      case "donut_hl_positions": {
-        const result = await handleHLPositions();
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
@@ -949,9 +877,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      // ============================================================================
-      // Trading Tools (Phase D: Polymarket Prediction Markets)
-      // ============================================================================
+      case "donut_hl_positions": {
+        const result = await handleHLPositions();
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_hl_open": {
+        const result = await handleHLOpen({
+          market: args?.market as string,
+          side: args?.side as "long" | "short",
+          size: args?.size as number,
+          leverage: args?.leverage as number,
+          orderType: args?.orderType as "market" | "limit" | undefined,
+          price: args?.price as number | undefined,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "donut_hl_close": {
+        const result = await handleHLClose(args?.market as string);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
 
       case "donut_pm_markets": {
         const result = await handlePMMarkets({
@@ -1006,10 +958,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
-
-      // ============================================================================
-      // Social Signal Discovery (Phase E: Farcaster Integration)
-      // ============================================================================
 
       case "donut_trending": {
         const result = await handleTrending({
@@ -1158,6 +1106,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       isError: true,
     };
   }
+}
+
+// ============================================================================
+// Server Setup
+// ============================================================================
+
+const server = new Server(
+  {
+    name: "donut-mcp",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// ============================================================================
+// Request Handlers
+// ============================================================================
+
+/**
+ * Handle tools/list request
+ */
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return { tools: TOOLS };
+});
+
+/**
+ * Handle tools/call request
+ */
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+  return executeToolHandler(name, args as Record<string, unknown> | undefined);
 });
 
 // ============================================================================

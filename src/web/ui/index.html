@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Donut CLI - Chat</title>
+  <style>
+    :root {
+      --bg-primary: #0d0d0d;
+      --bg-secondary: #1a1a1a;
+      --bg-tertiary: #252525;
+      --bg-hover: #2a2a2a;
+      --text-primary: #f0f0f0;
+      --text-secondary: #888;
+      --text-muted: #555;
+      --accent: #ff6b00;
+      --accent-dim: #cc5500;
+      --success: #00cc66;
+      --error: #ff4444;
+      --border: #333;
+      /* Agent colors */
+      --agent-strategy: #00BFFF;
+      --agent-backtest: #FF00FF;
+      --agent-chart: #FFFF00;
+      --agent-execution: #00FF00;
+      /* Layout */
+      --sidebar-width: 240px;
+      --drawer-width: 320px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* =========================================================================
+       Session Sidebar (WU-001, WU-008)
+       ========================================================================= */
+    .session-sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      height: 100vh;
+    }
+
+    .sidebar-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .btn-new-session {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.15s ease;
+    }
+
+    .btn-new-session:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .session-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+
+    .session-item {
+      padding: 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 0.25rem;
+      border: 2px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    .session-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .session-item.active {
+      background: var(--bg-tertiary);
+      border-color: var(--accent);
+    }
+
+    .session-title {
+      font-size: 0.8rem;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .session-stage {
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.05);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .session-stage.strategy_builder { color: var(--agent-strategy); }
+    .session-stage.backtest_analyst { color: var(--agent-backtest); }
+    .session-stage.chart_analyst { color: var(--agent-chart); }
+    .session-stage.execution_assistant { color: var(--agent-execution); }
+
+    /* User profile footer (WU-008) */
+    .sidebar-footer {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: white;
+    }
+
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-name {
+      font-size: 0.8rem;
+      color: var(--text-primary);
+    }
+
+    .health-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .health-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .health-dot.error {
+      background: var(--error);
+    }
+
+    /* =========================================================================
+       Main Content Area
+       ========================================================================= */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* =========================================================================
+       Welcome View (WU-002, WU-003, WU-004)
+       ========================================================================= */
+    .welcome-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      max-width: 680px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .welcome-view.hidden {
+      display: none;
+    }
+
+    .welcome-logo {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+
+    .welcome-title {
+      font-size: 1.5rem;
+      color: var(--text-primary);
+      margin-bottom: 2rem;
+      font-weight: 500;
+    }
+
+    /* Dropdowns row */
+    .dropdowns-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .dropdown-wrapper {
+      position: relative;
+      flex: 1;
+    }
+
+    .dropdown-label {
+      position: absolute;
+      top: -0.5rem;
+      left: 0.75rem;
+      background: var(--bg-primary);
+      padding: 0 0.35rem;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .dropdown {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+    }
+
+    .dropdown:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Main input (WU-002) */
+    .welcome-input-wrapper {
+      width: 100%;
+      max-width: 560px;
+      margin-bottom: 1.5rem;
+    }
+
+    .welcome-input {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 1rem;
+      resize: none;
+      min-height: 100px;
+      line-height: 1.5;
+    }
+
+    .welcome-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.1);
+    }
+
+    .welcome-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* Suggestion Cards (WU-004) */
+    .suggestion-cards {
+      display: flex;
+      gap: 1rem;
+      width: 100%;
+      max-width: 560px;
+    }
+
+    .suggestion-card {
+      flex: 1;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .suggestion-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      box-shadow: 0 4px 20px rgba(255, 107, 0, 0.15);
+    }
+
+    .suggestion-icon {
+      font-size: 1.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .suggestion-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.35rem;
+    }
+
+    .suggestion-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* =========================================================================
+       Chat View (WU-005, WU-006)
+       ========================================================================= */
+    .chat-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .chat-view.hidden {
+      display: none;
+    }
+
+    /* Workflow stage indicator (WU-006) */
+    .workflow-indicator {
+      padding: 0.5rem 1rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .workflow-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .workflow-stage {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      background: rgba(255, 107, 0, 0.1);
+      color: var(--accent);
+    }
+
+    .workflow-stage.strategy_builder { color: var(--agent-strategy); background: rgba(0, 191, 255, 0.1); }
+    .workflow-stage.backtest_analyst { color: var(--agent-backtest); background: rgba(255, 0, 255, 0.1); }
+    .workflow-stage.chart_analyst { color: var(--agent-chart); background: rgba(255, 255, 0, 0.1); }
+    .workflow-stage.execution_assistant { color: var(--agent-execution); background: rgba(0, 255, 0, 0.1); }
+
+    /* Chat messages */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .message {
+      max-width: 85%;
+      padding: 0.85rem 1.1rem;
+      border-radius: 12px;
+      line-height: 1.5;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      background: var(--bg-tertiary);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.system {
+      align-self: center;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 0.5rem;
+    }
+
+    .agent-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .agent-badge.strategy_builder { color: var(--agent-strategy); }
+    .agent-badge.backtest_analyst { color: var(--agent-backtest); }
+    .agent-badge.chart_analyst { color: var(--agent-chart); }
+    .agent-badge.execution_assistant { color: var(--agent-execution); }
+
+    .message-content {
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .streaming-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 1em;
+      background: var(--accent);
+      margin-left: 2px;
+      animation: blink 0.8s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    /* Tool indicators */
+    .tool-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.6rem;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+      margin-top: 0.5rem;
+      color: var(--text-secondary);
+    }
+
+    .tool-indicator.pending { color: var(--text-secondary); }
+    .tool-indicator.success { color: var(--success); }
+    .tool-indicator.error { color: var(--error); }
+
+    .tool-indicator-icon {
+      font-size: 0.9rem;
+    }
+
+    /* Chat input area */
+    .chat-input-area {
+      padding: 1rem 1.5rem;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .agent-selector-compact {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.75rem;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.5rem center;
+      padding-right: 1.5rem;
+    }
+
+    .agent-selector-compact:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 1rem;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.9rem;
+      resize: none;
+      min-height: 44px;
+      max-height: 150px;
+    }
+
+    .chat-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .chat-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .btn-send {
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.1rem;
+      color: white;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .btn-send:hover {
+      background: var(--accent-dim);
+    }
+
+    .btn-send:disabled {
+      background: var(--text-muted);
+      cursor: not-allowed;
+    }
+
+    /* =========================================================================
+       Tool Drawer (WU-007)
+       ========================================================================= */
+    .tool-drawer-toggle {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 1.25rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      z-index: 100;
+    }
+
+    .tool-drawer-toggle:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .tool-drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+      z-index: 200;
+    }
+
+    .tool-drawer-overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .tool-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: var(--drawer-width);
+      height: 100vh;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tool-drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .drawer-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .btn-close-drawer {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 0.25rem;
+    }
+
+    .btn-close-drawer:hover {
+      color: var(--text-primary);
+    }
+
+    .drawer-search {
+      padding: 0.75rem 1rem;
+    }
+
+    .drawer-search-input {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 0.85rem;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+
+    .drawer-search-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .drawer-search-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .drawer-tool-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .tool-item {
+      padding: 0.6rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 0.25rem;
+      transition: background 0.15s;
+    }
+
+    .tool-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .tool-name {
+      font-size: 0.8rem;
+      color: var(--accent);
+      margin-bottom: 0.15rem;
+    }
+
+    .tool-desc {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .drawer-footer {
+      padding: 0.6rem 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* =========================================================================
+       Notice Banner
+       ========================================================================= */
+    .notice-banner {
+      background: var(--bg-tertiary);
+      padding: 0.6rem 1rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .notice-banner a {
+      color: var(--accent);
+    }
+
+    /* =========================================================================
+       Spinner
+       ========================================================================= */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--text-muted);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* =========================================================================
+       Scrollbar
+       ========================================================================= */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* =========================================================================
+       Responsive (Mobile)
+       ========================================================================= */
+    @media (max-width: 768px) {
+      .session-sidebar {
+        display: none;
+      }
+
+      .welcome-view {
+        padding: 1rem;
+      }
+
+      .dropdowns-row {
+        flex-direction: column;
+      }
+
+      .suggestion-cards {
+        flex-direction: column;
+      }
+
+      .message {
+        max-width: 95%;
+      }
+
+      .tool-drawer {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Session Sidebar (WU-001, WU-008) -->
+  <aside class="session-sidebar" id="session-sidebar">
+    <div class="sidebar-header">
+      <button class="btn-new-session" id="btn-new-session">
+        <span>+</span>
+        <span>New session</span>
+      </button>
+    </div>
+    <div class="session-list" id="session-list">
+      <!-- Sessions loaded dynamically -->
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">D</div>
+      <div class="user-info">
+        <div class="user-name">Donut User</div>
+      </div>
+      <div class="health-indicator">
+        <span class="health-dot" id="health-dot"></span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Notice Banner -->
+    <div class="notice-banner" id="notice-banner" style="display: none;">
+      <span>Chat requires ANTHROPIC_API_KEY. </span>
+      <a href="https://github.com/donut-party/donut-cli#setup" target="_blank">Setup Guide</a>
+    </div>
+
+    <!-- Welcome View (WU-002, WU-003, WU-004) -->
+    <div class="welcome-view" id="welcome-view">
+      <div class="welcome-logo">🍩</div>
+      <div class="welcome-title">Donut</div>
+
+      <div class="dropdowns-row">
+        <div class="dropdown-wrapper">
+          <span class="dropdown-label">Context</span>
+          <select class="dropdown" id="context-dropdown">
+            <option value="default">Default</option>
+          </select>
+        </div>
+        <div class="dropdown-wrapper">
+          <span class="dropdown-label">Agent</span>
+          <select class="dropdown" id="agent-dropdown">
+            <option value="strategy_builder">📊 Strategy Builder</option>
+            <option value="backtest_analyst">📈 Backtest Analyst</option>
+            <option value="chart_analyst">📉 Chart Analyst</option>
+            <option value="execution_assistant">⚡ Execution Assistant</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="welcome-input-wrapper">
+        <textarea
+          class="welcome-input"
+          id="welcome-input"
+          placeholder="How can I help with trading today?"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <div class="suggestion-cards" id="suggestion-cards">
+        <div class="suggestion-card" data-action="strategy">
+          <div class="suggestion-icon">📊</div>
+          <div class="suggestion-title">Build Strategy</div>
+          <div class="suggestion-desc">Design a new trading strategy with AI assistance</div>
+        </div>
+        <div class="suggestion-card" data-action="backtest">
+          <div class="suggestion-icon">📈</div>
+          <div class="suggestion-title">Run Backtest</div>
+          <div class="suggestion-desc">Test your strategy against historical data</div>
+        </div>
+        <div class="suggestion-card" data-action="analysis">
+          <div class="suggestion-icon">🔍</div>
+          <div class="suggestion-title">Market Analysis</div>
+          <div class="suggestion-desc">Analyze charts and find trading opportunities</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat View (WU-005, WU-006) -->
+    <div class="chat-view hidden" id="chat-view">
+      <div class="workflow-indicator" id="workflow-indicator">
+        <span class="workflow-label">Stage</span>
+        <span class="workflow-stage" id="workflow-stage">DISCOVERY</span>
+      </div>
+
+      <div class="chat-messages" id="chat-messages">
+        <!-- Messages loaded dynamically -->
+      </div>
+
+      <div class="chat-input-area">
+        <div class="chat-input-row">
+          <select class="agent-selector-compact" id="agent-selector-compact">
+            <option value="strategy_builder">📊 Strategy</option>
+            <option value="backtest_analyst">📈 Backtest</option>
+            <option value="chart_analyst">📉 Chart</option>
+            <option value="execution_assistant">⚡ Execute</option>
+          </select>
+          <textarea
+            class="chat-input"
+            id="chat-input"
+            placeholder="Type a message..."
+            rows="1"
+          ></textarea>
+          <button class="btn-send" id="btn-send">Send</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Tool Drawer Toggle (WU-007) -->
+  <button class="tool-drawer-toggle" id="tool-drawer-toggle" title="Tools">🔧</button>
+
+  <!-- Tool Drawer Overlay -->
+  <div class="tool-drawer-overlay" id="tool-drawer-overlay"></div>
+
+  <!-- Tool Drawer (WU-007) -->
+  <aside class="tool-drawer" id="tool-drawer">
+    <div class="drawer-header">
+      <span class="drawer-title">Tools</span>
+      <button class="btn-close-drawer" id="btn-close-drawer">×</button>
+    </div>
+    <div class="drawer-search">
+      <input type="text" class="drawer-search-input" placeholder="Search tools..." id="drawer-search-input">
+    </div>
+    <div class="drawer-tool-list" id="drawer-tool-list">
+      <div style="text-align: center; padding: 1rem; color: var(--text-muted);">
+        <div class="spinner"></div>
+      </div>
+    </div>
+    <div class="drawer-footer" id="drawer-footer">-</div>
+  </aside>
+
+  <script>
+    // =========================================================================
+    // State
+    // =========================================================================
+    const state = {
+      sessionId: null,
+      currentAgentType: 'strategy_builder',
+      isStreaming: false,
+      chatEnabled: false,
+      tools: [],
+      sessions: [],
+      viewMode: 'welcome', // 'welcome' | 'chat'
+      workflowStage: 'DISCOVERY',
+      toolDrawerOpen: false,
+    };
+
+    // =========================================================================
+    // DOM Elements
+    // =========================================================================
+    const elements = {
+      // Session sidebar
+      sessionSidebar: document.getElementById('session-sidebar'),
+      sessionList: document.getElementById('session-list'),
+      btnNewSession: document.getElementById('btn-new-session'),
+      healthDot: document.getElementById('health-dot'),
+
+      // Notice
+      noticeBanner: document.getElementById('notice-banner'),
+
+      // Welcome view
+      welcomeView: document.getElementById('welcome-view'),
+      contextDropdown: document.getElementById('context-dropdown'),
+      agentDropdown: document.getElementById('agent-dropdown'),
+      welcomeInput: document.getElementById('welcome-input'),
+      suggestionCards: document.getElementById('suggestion-cards'),
+
+      // Chat view
+      chatView: document.getElementById('chat-view'),
+      workflowIndicator: document.getElementById('workflow-indicator'),
+      workflowStage: document.getElementById('workflow-stage'),
+      chatMessages: document.getElementById('chat-messages'),
+      agentSelectorCompact: document.getElementById('agent-selector-compact'),
+      chatInput: document.getElementById('chat-input'),
+      btnSend: document.getElementById('btn-send'),
+
+      // Tool drawer
+      toolDrawerToggle: document.getElementById('tool-drawer-toggle'),
+      toolDrawerOverlay: document.getElementById('tool-drawer-overlay'),
+      toolDrawer: document.getElementById('tool-drawer'),
+      btnCloseDrawer: document.getElementById('btn-close-drawer'),
+      drawerSearchInput: document.getElementById('drawer-search-input'),
+      drawerToolList: document.getElementById('drawer-tool-list'),
+      drawerFooter: document.getElementById('drawer-footer'),
+    };
+
+    // =========================================================================
+    // Agent Display Config
+    // =========================================================================
+    const AGENT_DISPLAY = {
+      strategy_builder: { emoji: '📊', name: 'Strategy Builder', color: 'var(--agent-strategy)' },
+      backtest_analyst: { emoji: '📈', name: 'Backtest Analyst', color: 'var(--agent-backtest)' },
+      chart_analyst: { emoji: '📉', name: 'Chart Analyst', color: 'var(--agent-chart)' },
+      execution_assistant: { emoji: '⚡', name: 'Execution Assistant', color: 'var(--agent-execution)' },
+    };
+
+    // Workflow stage mapping
+    const AGENT_TO_STAGE = {
+      strategy_builder: 'STRATEGY_BUILD',
+      backtest_analyst: 'BACKTEST',
+      chart_analyst: 'ANALYSIS',
+      execution_assistant: 'EXECUTION',
+    };
+
+    // Suggestion card actions
+    const SUGGESTION_ACTIONS = {
+      strategy: { agent: 'strategy_builder', prompt: 'Help me build a new trading strategy.' },
+      backtest: { agent: 'backtest_analyst', prompt: 'Help me analyze my recent backtest results.' },
+      analysis: { agent: 'chart_analyst', prompt: 'What tokens are trending right now?' },
+    };
+
+    // =========================================================================
+    // View Mode (WU-005)
+    // =========================================================================
+    function setViewMode(mode) {
+      state.viewMode = mode;
+
+      if (mode === 'welcome') {
+        elements.welcomeView.classList.remove('hidden');
+        elements.chatView.classList.add('hidden');
+      } else {
+        elements.welcomeView.classList.add('hidden');
+        elements.chatView.classList.remove('hidden');
+      }
+    }
+
+    // =========================================================================
+    // Workflow Stage (WU-006)
+    // =========================================================================
+    function updateWorkflowStage(agentType) {
+      const stage = AGENT_TO_STAGE[agentType] || 'DISCOVERY';
+      state.workflowStage = stage;
+      state.currentAgentType = agentType;
+
+      elements.workflowStage.textContent = stage;
+      elements.workflowStage.className = 'workflow-stage ' + agentType;
+
+      // Sync dropdowns
+      elements.agentDropdown.value = agentType;
+      elements.agentSelectorCompact.value = agentType;
+    }
+
+    // =========================================================================
+    // Tool Drawer (WU-007)
+    // =========================================================================
+    function toggleToolDrawer() {
+      state.toolDrawerOpen = !state.toolDrawerOpen;
+      elements.toolDrawer.classList.toggle('open', state.toolDrawerOpen);
+      elements.toolDrawerOverlay.classList.toggle('open', state.toolDrawerOpen);
+    }
+
+    function closeToolDrawer() {
+      state.toolDrawerOpen = false;
+      elements.toolDrawer.classList.remove('open');
+      elements.toolDrawerOverlay.classList.remove('open');
+    }
+
+    // =========================================================================
+    // API Functions
+    // =========================================================================
+    async function fetchHealth() {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        elements.healthDot.classList.remove('error');
+
+        state.chatEnabled = data.features?.chat ?? false;
+        if (!state.chatEnabled) {
+          elements.noticeBanner.style.display = 'block';
+        } else {
+          elements.noticeBanner.style.display = 'none';
+        }
+        return true;
+      } catch (e) {
+        elements.healthDot.classList.add('error');
+        return false;
+      }
+    }
+
+    async function fetchTools() {
+      try {
+        const res = await fetch('/api/tools');
+        const data = await res.json();
+        state.tools = data.tools || [];
+        renderToolList();
+      } catch (e) {
+        console.error('Failed to fetch tools:', e);
+      }
+    }
+
+    async function fetchSessions() {
+      try {
+        const res = await fetch('/api/sessions');
+        const data = await res.json();
+        state.sessions = data.sessions || [];
+        renderSessionList();
+      } catch (e) {
+        console.error('Failed to fetch sessions:', e);
+      }
+    }
+
+    async function loadSession(sessionId) {
+      try {
+        const res = await fetch('/api/sessions/' + encodeURIComponent(sessionId));
+        const data = await res.json();
+        if (data.session) {
+          state.sessionId = data.session.sessionId;
+          state.currentAgentType = data.session.currentAgentType || 'strategy_builder';
+
+          renderMessages(data.session.messages || []);
+          updateWorkflowStage(state.currentAgentType);
+
+          // Switch to chat view if there are messages
+          if (data.session.messages && data.session.messages.length > 0) {
+            setViewMode('chat');
+          }
+
+          // Update session list to show active
+          renderSessionList();
+        }
+      } catch (e) {
+        console.error('Failed to load session:', e);
+      }
+    }
+
+    async function createNewSession() {
+      state.sessionId = null;
+      state.currentAgentType = 'strategy_builder';
+      elements.chatMessages.replaceChildren();
+      setViewMode('welcome');
+      renderSessionList();
+    }
+
+    // =========================================================================
+    // Rendering - Session List (WU-001)
+    // =========================================================================
+    function renderSessionList() {
+      elements.sessionList.replaceChildren();
+
+      if (state.sessions.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;';
+        empty.textContent = 'No sessions yet';
+        elements.sessionList.appendChild(empty);
+        return;
+      }
+
+      state.sessions.forEach(function(session) {
+        const item = document.createElement('div');
+        item.className = 'session-item';
+        if (session.sessionId === state.sessionId) {
+          item.classList.add('active');
+        }
+
+        const title = document.createElement('div');
+        title.className = 'session-title';
+        title.textContent = session.title || 'Untitled';
+
+        const meta = document.createElement('div');
+        meta.className = 'session-meta';
+
+        const time = document.createElement('span');
+        time.textContent = formatSessionTime(session.updatedAt);
+
+        const stage = document.createElement('span');
+        stage.className = 'session-stage';
+        // Extract stage from title or use default
+        const agentType = inferAgentFromTitle(session.title);
+        if (agentType) {
+          stage.classList.add(agentType);
+          stage.textContent = AGENT_TO_STAGE[agentType] || 'CHAT';
+        } else {
+          stage.textContent = session.messageCount > 0 ? 'CHAT' : 'NEW';
+        }
+
+        meta.appendChild(time);
+        meta.appendChild(stage);
+
+        item.appendChild(title);
+        item.appendChild(meta);
+
+        item.addEventListener('click', function() {
+          loadSession(session.sessionId);
+        });
+
+        elements.sessionList.appendChild(item);
+      });
+    }
+
+    function formatSessionTime(isoString) {
+      const date = new Date(isoString);
+      const now = new Date();
+      const diff = now - date;
+
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (diff < 172800000) return 'Yesterday';
+      return date.toLocaleDateString();
+    }
+
+    function inferAgentFromTitle(title) {
+      if (!title) return null;
+      const lower = title.toLowerCase();
+      if (lower.includes('strategy') || lower.includes('build')) return 'strategy_builder';
+      if (lower.includes('backtest') || lower.includes('test')) return 'backtest_analyst';
+      if (lower.includes('chart') || lower.includes('analysis') || lower.includes('trend')) return 'chart_analyst';
+      if (lower.includes('execute') || lower.includes('trade') || lower.includes('position')) return 'execution_assistant';
+      return null;
+    }
+
+    // =========================================================================
+    // Rendering - Tool List (WU-007)
+    // =========================================================================
+    function renderToolList(filter) {
+      filter = filter || '';
+      const lowerFilter = filter.toLowerCase();
+      const filtered = filter
+        ? state.tools.filter(function(t) {
+            return t.name.toLowerCase().includes(lowerFilter) ||
+                   t.description.toLowerCase().includes(lowerFilter);
+          })
+        : state.tools;
+
+      elements.drawerToolList.replaceChildren();
+
+      if (filtered.length === 0) {
+        const msg = document.createElement('div');
+        msg.style.cssText = 'text-align: center; padding: 1rem; color: var(--text-muted);';
+        msg.textContent = 'No tools found';
+        elements.drawerToolList.appendChild(msg);
+        elements.drawerFooter.textContent = '0 of ' + state.tools.length + ' tools';
+        return;
+      }
+
+      filtered.forEach(function(tool) {
+        const item = document.createElement('div');
+        item.className = 'tool-item';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'tool-name';
+        nameEl.textContent = tool.name;
+
+        const descEl = document.createElement('div');
+        descEl.className = 'tool-desc';
+        descEl.textContent = tool.description;
+
+        item.appendChild(nameEl);
+        item.appendChild(descEl);
+
+        item.addEventListener('click', function() {
+          const input = state.viewMode === 'welcome' ? elements.welcomeInput : elements.chatInput;
+          input.value = 'Use the ' + tool.name + ' tool to ';
+          input.focus();
+          closeToolDrawer();
+        });
+
+        elements.drawerToolList.appendChild(item);
+      });
+
+      elements.drawerFooter.textContent = (filter ? filtered.length + ' of ' : '') + state.tools.length + ' tools';
+    }
+
+    // =========================================================================
+    // Rendering - Messages
+    // =========================================================================
+    function renderMessages(messages) {
+      elements.chatMessages.replaceChildren();
+      messages.forEach(function(msg) {
+        addMessageToUI(msg.role, msg.content, msg.agentType, msg.toolUse);
+      });
+    }
+
+    function addMessageToUI(role, content, agentType, toolUse) {
+      const msgEl = document.createElement('div');
+      msgEl.className = 'message ' + role;
+
+      if (role === 'assistant' && agentType) {
+        const display = AGENT_DISPLAY[agentType] || AGENT_DISPLAY.strategy_builder;
+        const badge = document.createElement('div');
+        badge.className = 'agent-badge ' + agentType;
+        badge.textContent = display.emoji + ' ' + display.name;
+        msgEl.appendChild(badge);
+      }
+
+      const contentEl = document.createElement('div');
+      contentEl.className = 'message-content';
+      contentEl.textContent = content;
+      msgEl.appendChild(contentEl);
+
+      if (toolUse && toolUse.length > 0) {
+        toolUse.forEach(function(tool) {
+          const indicator = createToolIndicator(tool.toolName, tool.status);
+          msgEl.appendChild(indicator);
+        });
+      }
+
+      elements.chatMessages.appendChild(msgEl);
+      elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+
+      return msgEl;
+    }
+
+    function createToolIndicator(toolName, status) {
+      const indicator = document.createElement('div');
+      indicator.className = 'tool-indicator ' + status;
+      indicator.setAttribute('data-tool', toolName);
+
+      const icon = document.createElement('span');
+      icon.className = 'tool-indicator-icon';
+      icon.textContent = status === 'pending' ? '⏳' : status === 'success' ? '✓' : '✗';
+
+      const name = document.createElement('span');
+      name.textContent = toolName;
+
+      indicator.appendChild(icon);
+      indicator.appendChild(name);
+
+      return indicator;
+    }
+
+    function createStreamingMessage(agentType) {
+      const msgEl = document.createElement('div');
+      msgEl.className = 'message assistant';
+      msgEl.id = 'streaming-message';
+
+      if (agentType) {
+        const display = AGENT_DISPLAY[agentType] || AGENT_DISPLAY.strategy_builder;
+        const badge = document.createElement('div');
+        badge.className = 'agent-badge ' + agentType;
+        badge.textContent = display.emoji + ' ' + display.name;
+        msgEl.appendChild(badge);
+      }
+
+      const contentEl = document.createElement('div');
+      contentEl.className = 'message-content';
+      contentEl.id = 'streaming-content';
+      msgEl.appendChild(contentEl);
+
+      const cursor = document.createElement('span');
+      cursor.className = 'streaming-cursor';
+      cursor.id = 'streaming-cursor';
+      contentEl.appendChild(cursor);
+
+      elements.chatMessages.appendChild(msgEl);
+      elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+
+      return msgEl;
+    }
+
+    function appendToStreamingMessage(text) {
+      const contentEl = document.getElementById('streaming-content');
+      const cursor = document.getElementById('streaming-cursor');
+      if (contentEl && cursor) {
+        const textNode = document.createTextNode(text);
+        contentEl.insertBefore(textNode, cursor);
+        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+      }
+    }
+
+    function addToolIndicatorToStreaming(toolName, status) {
+      const msgEl = document.getElementById('streaming-message');
+      if (!msgEl) return;
+
+      let indicator = msgEl.querySelector('[data-tool="' + toolName + '"]');
+      if (indicator) {
+        indicator.className = 'tool-indicator ' + status;
+        indicator.replaceChildren();
+
+        const icon = document.createElement('span');
+        icon.className = 'tool-indicator-icon';
+        icon.textContent = status === 'pending' ? '⏳' : status === 'success' ? '✓' : '✗';
+
+        const name = document.createElement('span');
+        name.textContent = toolName;
+
+        indicator.appendChild(icon);
+        indicator.appendChild(name);
+      } else {
+        indicator = createToolIndicator(toolName, status);
+        msgEl.appendChild(indicator);
+      }
+    }
+
+    function finalizeStreamingMessage() {
+      const cursor = document.getElementById('streaming-cursor');
+      if (cursor) cursor.remove();
+
+      const msgEl = document.getElementById('streaming-message');
+      if (msgEl) msgEl.id = '';
+
+      const contentEl = document.getElementById('streaming-content');
+      if (contentEl) contentEl.id = '';
+    }
+
+    // =========================================================================
+    // Chat Streaming
+    // =========================================================================
+    async function sendMessage(message, agentType) {
+      if (!message.trim() || state.isStreaming) return;
+
+      // Switch to chat view
+      setViewMode('chat');
+
+      // Update workflow stage
+      updateWorkflowStage(agentType || state.currentAgentType);
+
+      // Add user message
+      addMessageToUI('user', message);
+
+      // Clear inputs
+      elements.welcomeInput.value = '';
+      elements.chatInput.value = '';
+      elements.chatInput.style.height = 'auto';
+
+      // Disable input
+      state.isStreaming = true;
+      elements.btnSend.disabled = true;
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: state.sessionId || '',
+            message: message,
+            agentType: agentType || state.currentAgentType,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          addMessageToUI('system', 'Error: ' + (error.message || error.error || 'Unknown error'));
+          return;
+        }
+
+        // Handle SSE stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let streamingStarted = false;
+        let currentAgentType = agentType || state.currentAgentType;
+
+        while (true) {
+          const result = await reader.read();
+          if (result.done) break;
+
+          buffer += decoder.decode(result.value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.startsWith('event: ')) continue;
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                handleSSEEvent(data, currentAgentType, function(agent) {
+                  currentAgentType = agent;
+                  if (!streamingStarted) {
+                    createStreamingMessage(agent);
+                    streamingStarted = true;
+                  }
+                });
+              } catch (e) {
+                console.error('Failed to parse SSE data:', e);
+              }
+            }
+          }
+        }
+
+        finalizeStreamingMessage();
+
+      } catch (e) {
+        console.error('Chat error:', e);
+        addMessageToUI('system', 'Error: ' + e.message);
+      } finally {
+        state.isStreaming = false;
+        elements.btnSend.disabled = false;
+        elements.chatInput.focus();
+      }
+    }
+
+    function handleSSEEvent(data, currentAgentType, onAgentStart) {
+      if (data.type === 'init') {
+        state.sessionId = data.sessionId;
+        fetchSessions();
+      } else if (data.type === 'agent_start') {
+        state.currentAgentType = data.agentType;
+        updateWorkflowStage(data.agentType);
+        onAgentStart(data.agentType);
+      } else if (data.type === 'agent_end') {
+        // Streaming complete
+      } else if (data.text) {
+        appendToStreamingMessage(data.text);
+      } else if (data.toolName) {
+        addToolIndicatorToStreaming(data.toolName, data.status || 'pending');
+      } else if (data.message) {
+        appendToStreamingMessage('\n\nError: ' + data.message);
+      }
+    }
+
+    // =========================================================================
+    // Suggestion Card Handler (WU-004)
+    // =========================================================================
+    function handleCardClick(action) {
+      const config = SUGGESTION_ACTIONS[action];
+      if (!config) return;
+
+      elements.agentDropdown.value = config.agent;
+      sendMessage(config.prompt, config.agent);
+    }
+
+    // =========================================================================
+    // Event Handlers
+    // =========================================================================
+    // New session button
+    elements.btnNewSession.addEventListener('click', createNewSession);
+
+    // Welcome input - Enter to send
+    elements.welcomeInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const message = elements.welcomeInput.value.trim();
+        if (message) {
+          sendMessage(message, elements.agentDropdown.value);
+        }
+      }
+    });
+
+    // Chat input - Enter to send
+    elements.chatInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const message = elements.chatInput.value.trim();
+        if (message) {
+          sendMessage(message, elements.agentSelectorCompact.value);
+        }
+      }
+    });
+
+    // Chat input auto-resize
+    elements.chatInput.addEventListener('input', function() {
+      elements.chatInput.style.height = 'auto';
+      elements.chatInput.style.height = Math.min(elements.chatInput.scrollHeight, 150) + 'px';
+    });
+
+    // Send button
+    elements.btnSend.addEventListener('click', function() {
+      const message = elements.chatInput.value.trim();
+      if (message) {
+        sendMessage(message, elements.agentSelectorCompact.value);
+      }
+    });
+
+    // Agent dropdown sync
+    elements.agentDropdown.addEventListener('change', function() {
+      elements.agentSelectorCompact.value = elements.agentDropdown.value;
+    });
+
+    elements.agentSelectorCompact.addEventListener('change', function() {
+      elements.agentDropdown.value = elements.agentSelectorCompact.value;
+    });
+
+    // Suggestion cards
+    elements.suggestionCards.addEventListener('click', function(e) {
+      const card = e.target.closest('.suggestion-card');
+      if (card) {
+        handleCardClick(card.dataset.action);
+      }
+    });
+
+    // Tool drawer toggle
+    elements.toolDrawerToggle.addEventListener('click', toggleToolDrawer);
+    elements.btnCloseDrawer.addEventListener('click', closeToolDrawer);
+    elements.toolDrawerOverlay.addEventListener('click', closeToolDrawer);
+
+    // Tool search
+    elements.drawerSearchInput.addEventListener('input', function(e) {
+      renderToolList(e.target.value);
+    });
+
+    // =========================================================================
+    // Initialize
+    // =========================================================================
+    async function init() {
+      await fetchHealth();
+      await fetchTools();
+      await fetchSessions();
+
+      // Poll health every 30s
+      setInterval(fetchHealth, 30000);
+
+      // Focus welcome input
+      elements.welcomeInput.focus();
+    }
+
+    init();
+  </script>
+</body>
+</html>
