@@ -2,6 +2,7 @@
  * TUI Theme - Colors, icons, and UI constants
  *
  * Consistent visual styling for the interactive terminal UI
+ * Enhanced with SRCL-inspired terminal aesthetics
  */
 
 import chalk from "chalk";
@@ -31,6 +32,9 @@ export const MUTED = chalk.gray;
 /** Bold white for emphasis */
 export const EMPHASIS = chalk.bold.white;
 
+/** Info color */
+export const INFO = chalk.cyan;
+
 // ============================================================================
 // Icons
 // ============================================================================
@@ -48,13 +52,27 @@ export const ICONS = {
   tool: "🔧",
   loading: "⏳",
   done: "✅",
+  // Navigation
+  pointer: "▸",
+  pointerEmpty: "▹",
+  chevronRight: "❯",
+  // Selection
+  checkbox: "☐",
+  checkboxChecked: "☑",
+  radio: "○",
+  radioSelected: "◉",
+  // Trading
+  up: "▲",
+  down: "▼",
+  buy: "↑",
+  sell: "↓",
 } as const;
 
 // ============================================================================
 // UI Components
 // ============================================================================
 
-/** Box drawing characters for banner */
+/** Box drawing characters - single line */
 export const BOX = {
   topLeft: "╭",
   topRight: "╮",
@@ -63,15 +81,49 @@ export const BOX = {
   horizontal: "─",
   vertical: "│",
   divider: "━",
+  teeLeft: "├",
+  teeRight: "┤",
+  teeUp: "┴",
+  teeDown: "┬",
+  cross: "┼",
 } as const;
 
-/** Welcome banner for interactive mode */
+/** Box drawing characters - double line (MS-DOS style) */
+export const BOX_DOUBLE = {
+  topLeft: "╔",
+  topRight: "╗",
+  bottomLeft: "╚",
+  bottomRight: "╝",
+  horizontal: "═",
+  vertical: "║",
+  teeLeft: "╠",
+  teeRight: "╣",
+  teeUp: "╩",
+  teeDown: "╦",
+  cross: "╬",
+} as const;
+
+/** Block characters for progress bars */
+export const BLOCKS = {
+  full: "█",
+  threeQuarter: "▓",
+  half: "▒",
+  quarter: "░",
+} as const;
+
+/** Welcome banner for interactive mode - SRCL-inspired double-line border */
 export const INTERACTIVE_BANNER = `
-${PRIMARY(BOX.topLeft + BOX.horizontal.repeat(63) + BOX.topRight)}
-${PRIMARY(BOX.vertical)}  ${ICONS.donut} ${EMPHASIS("DONUT CLI")} - ${MUTED("Interactive Mode")}                              ${PRIMARY(BOX.vertical)}
-${PRIMARY(BOX.vertical)}                                                                 ${PRIMARY(BOX.vertical)}
-${PRIMARY(BOX.vertical)}  ${MUTED("Commands:")} ${SECONDARY("/strategy")}  ${SECONDARY("/backtest")}  ${SECONDARY("/paper")}  ${SECONDARY("/help")}  ${SECONDARY("/quit")}     ${PRIMARY(BOX.vertical)}
-${PRIMARY(BOX.bottomLeft + BOX.horizontal.repeat(63) + BOX.bottomRight)}
+${PRIMARY(BOX_DOUBLE.topLeft + BOX_DOUBLE.horizontal.repeat(63) + BOX_DOUBLE.topRight)}
+${PRIMARY(BOX_DOUBLE.vertical)}                                                               ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.vertical)}   ${ICONS.donut} ${EMPHASIS("DONUT CLI")} ${MUTED("━━━")} ${chalk.italic("AI-Powered Trading Terminal")}                ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.vertical)}                                                               ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.teeLeft + BOX_DOUBLE.horizontal.repeat(63) + BOX_DOUBLE.teeRight)}
+${PRIMARY(BOX_DOUBLE.vertical)}   ${MUTED("Commands")}                                                      ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.vertical)}   ${SECONDARY("/strategy")} ${MUTED("Build strategies")}    ${SECONDARY("/backtest")} ${MUTED("Test on history")}      ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.vertical)}   ${SECONDARY("/paper")} ${MUTED("Paper trading")}       ${SECONDARY("/status")} ${MUTED("Session status")}         ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.vertical)}   ${SECONDARY("/help")} ${MUTED("Show help")}           ${SECONDARY("/quit")} ${MUTED("Exit")}                     ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.vertical)}                                                               ${PRIMARY(BOX_DOUBLE.vertical)}
+${PRIMARY(BOX_DOUBLE.bottomLeft + BOX_DOUBLE.horizontal.repeat(63) + BOX_DOUBLE.bottomRight)}
 `;
 
 /** Separator line */

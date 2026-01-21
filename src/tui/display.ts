@@ -255,3 +255,86 @@ export function processAgentMessage(
 export function displayGoodbye(): void {
   console.log(`\n${chalk.hex("#FF6B35")("🍩")} ${MUTED("Goodbye! Happy trading.")}\n`);
 }
+
+// ============================================================================
+// SRCL-Inspired Display Enhancements
+// ============================================================================
+
+/**
+ * Display a bordered panel with title
+ */
+export function displayPanel(title: string, content: string[], variant: "default" | "primary" | "success" | "warning" | "error" = "default"): void {
+  const colorFn = variant === "primary" ? chalk.hex("#FF6B35") :
+                  variant === "success" ? chalk.green :
+                  variant === "warning" ? chalk.yellow :
+                  variant === "error" ? chalk.red :
+                  chalk.gray;
+
+  const width = 60;
+  const innerWidth = width - 2;
+
+  // Top border with title
+  const titleText = ` ${title} `;
+  const titleLen = titleText.length;
+  const leftPad = Math.floor((innerWidth - titleLen) / 2);
+  const rightPad = innerWidth - leftPad - titleLen;
+
+  console.log(colorFn(`╔${"═".repeat(leftPad)}${titleText}${"═".repeat(rightPad)}╗`));
+
+  // Content
+  for (const line of content) {
+    const paddedLine = line.padEnd(innerWidth);
+    console.log(colorFn("║") + paddedLine + colorFn("║"));
+  }
+
+  // Bottom border
+  console.log(colorFn(`╚${"═".repeat(innerWidth)}╝`));
+}
+
+/**
+ * Display a progress bar
+ */
+export function displayProgress(label: string, value: number, total: number = 100, width: number = 30): void {
+  const percent = Math.min(100, Math.max(0, (value / total) * 100));
+  const filled = Math.round((percent / 100) * width);
+  const empty = width - filled;
+
+  const bar = chalk.hex("#FF6B35")("█".repeat(filled)) + chalk.gray("░".repeat(empty));
+  console.log(`${label} [${bar}] ${percent.toFixed(0)}%`);
+}
+
+/**
+ * Display a key-value table
+ */
+export function displayKeyValue(data: Array<{ label: string; value: string }>, labelWidth: number = 20): void {
+  for (const { label, value } of data) {
+    console.log(`${chalk.gray(label.padEnd(labelWidth))} ${value}`);
+  }
+}
+
+/**
+ * Display a loading spinner frame
+ */
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+export function getSpinnerFrame(frameIndex: number): string {
+  return chalk.hex("#FF6B35")(SPINNER_FRAMES[frameIndex % SPINNER_FRAMES.length]);
+}
+
+/**
+ * Display a banner notification
+ */
+export function displayBanner(message: string, variant: "info" | "success" | "warning" | "error" = "info"): void {
+  const icon = variant === "success" ? "✓" :
+               variant === "warning" ? "⚠" :
+               variant === "error" ? "✗" : "ℹ";
+
+  const colorFn = variant === "success" ? chalk.green :
+                  variant === "warning" ? chalk.yellow :
+                  variant === "error" ? chalk.red :
+                  chalk.cyan;
+
+  const width = 60;
+  console.log(colorFn(`┌${"─".repeat(width - 2)}┐`));
+  console.log(colorFn(`│ ${icon} ${message.padEnd(width - 5)} │`));
+  console.log(colorFn(`└${"─".repeat(width - 2)}┘`));
+}
