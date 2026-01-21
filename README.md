@@ -29,11 +29,78 @@ AI-powered crypto trading terminal with multi-agent orchestration powered by the
 
 ## MCP Integration
 
-Use donut-cli tools directly from Claude Code without leaving your terminal.
+Use donut-cli tools directly from Claude Code, Cursor, VS Code, or Claude Desktop.
 
-### Setup
+### Quick Setup (HTTP Mode)
 
-After installing donut-cli, add to your Claude Code settings (`~/.claude/settings.json`):
+The simplest way to connect is via HTTP. First, authenticate and start the server:
+
+```bash
+# 1. Authenticate (one-time setup)
+donut auth login
+
+# 2. Start the MCP server
+donut web
+```
+
+Then add to your MCP client:
+
+#### Claude Code
+
+```bash
+claude mcp add -t http donut http://localhost:4567/mcp
+```
+
+Verify it's working:
+```bash
+claude mcp list  # Should show 'donut'
+```
+
+#### Cursor
+
+Add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "donut": {
+      "url": "http://localhost:4567/mcp"
+    }
+  }
+}
+```
+
+#### VS Code (with Cline/Continue extension)
+
+Add to VS Code settings (`settings.json`):
+
+```json
+{
+  "cline.mcpServers": {
+    "donut": {
+      "url": "http://localhost:4567/mcp"
+    }
+  }
+}
+```
+
+#### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "donut": {
+      "url": "http://localhost:4567/mcp"
+    }
+  }
+}
+```
+
+### Alternative: Stdio Mode (Local Installation)
+
+For local development without running a server, use stdio transport:
 
 ```json
 {
@@ -49,19 +116,15 @@ After installing donut-cli, add to your Claude Code settings (`~/.claude/setting
 }
 ```
 
-**Authentication Options:**
+### Authentication
 
-1. **Turnkey (Recommended):** Run `donut auth login` to authenticate with Google OAuth. Your Turnkey wallets are automatically used for all operations. No private keys needed in config.
+**Turnkey (Recommended):** Run `donut auth login` to authenticate with Google OAuth. Your Turnkey wallets are automatically used for all operations. No private keys needed.
 
-2. **Legacy (Private Keys):** Add keys directly to the env config:
-```json
-{
-  "env": {
-    "SOLANA_PRIVATE_KEY": "your-base58-private-key",
-    "BASE_PRIVATE_KEY": "your-hex-private-key",
-    "HYPERLIQUID_PRIVATE_KEY": "your-hex-private-key"
-  }
-}
+**Legacy (Private Keys):** Set environment variables for the MCP server:
+```bash
+export SOLANA_PRIVATE_KEY=your-base58-private-key
+export BASE_PRIVATE_KEY=your-hex-private-key
+export HYPERLIQUID_PRIVATE_KEY=your-hex-private-key
 ```
 
 **Security Note:** Private keys should never be shared or committed to version control. When using Turnkey, keys remain in HSM infrastructure and are never exposed.
