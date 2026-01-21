@@ -34,6 +34,7 @@ import {
 } from "./cli/index.js";
 import { startInteractiveMode } from "./tui/index.js";
 import { startInteractiveDemo } from "./demo/index.js";
+import { startWebServer } from "./web/index.js";
 import { registerShutdownHandler, onShutdown } from "./core/shutdown.js";
 import { createLogger } from "./core/logger.js";
 
@@ -99,6 +100,24 @@ program
       }
       process.exit(1);
     }
+  });
+
+// ============================================================================
+// Web Server Mode (MCP HTTP Endpoint)
+// ============================================================================
+
+program
+  .command("web")
+  .description("Start web server with MCP endpoint for Claude Code/Cursor integration")
+  .option("-p, --port <number>", "Port to listen on", "4567")
+  .option("-H, --hostname <string>", "Hostname to bind to", "127.0.0.1")
+  .action((options) => {
+    const port = parseInt(options.port, 10);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      console.error(chalk.red("Invalid port number"));
+      process.exit(1);
+    }
+    startWebServer({ port, hostname: options.hostname });
   });
 
 // ============================================================================
